@@ -44,10 +44,11 @@ update after each session / PR merge.
 ### phase 1 — fetch layer
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| static fetcher (undici)      | not started | —     | —     |
-| JS detector heuristic        | not started | —     | —     |
-| Playwright fetcher           | not started | —     | —     |
-| fetch router                 | not started | —     | —     |
+| static fetcher (undici)      | ✓ done      | —     | Node.js built-in fetch, URL validation, timeout, UA |
+| JS detector heuristic        | ✓ done      | —     | 11 framework signatures, app shell detection |
+| Playwright fetcher           | ✓ done      | —     | dynamic import, resource blocking, video captions |
+| fetch router                 | ✓ done      | —     | graceful fallback, progress callbacks |
+| tests (37 new)               | ✓ done      | —     | 55 total passing (detect: 13, static: 14, router: 10) |
 
 ### phase 2 — extraction layer
 | task                          | status      | PR    | notes |
