@@ -28,11 +28,18 @@ update after each session / PR merge.
 ### phase 0 — project setup
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| npm package init             | not started | —     | —     |
-| TypeScript config            | not started | —     | —     |
-| tsup build config            | not started | —     | —     |
-| vitest setup                 | not started | —     | —     |
-| GitHub repo + CI             | not started | —     | —     |
+| npm package init             | ✓ done      | —     | rawfy@0.1.0, ESM, Node >=18 |
+| TypeScript config            | ✓ done      | —     | strict, ES2022, TS6 compat |
+| tsup build config            | ✓ done      | —     | 4 entry points, DTS, sourcemaps |
+| eslint + prettier            | ✓ done      | —     | flat config, strict type-checked |
+| vitest setup                 | ✓ done      | —     | unit + integration separation |
+| src/ directory structure     | ✓ done      | —     | 24 modules, matches TECHSTACK.md |
+| types.ts (shared types)      | ✓ done      | —     | 180+ lines, full type registry |
+| errors.ts (error factory)    | ✓ done      | —     | createError, wrapError, isRawfyError |
+| truncate.ts (token util)     | ✓ done      | —     | estimateTokens, truncate |
+| smoke tests (18 passing)     | ✓ done      | —     | errors + truncate tests |
+| GitHub Actions CI            | ✓ done      | —     | 3 OS × 3 Node versions |
+| git init + push              | ✓ done      | —     | dev branch → github.com/rishiiicreates/rawfy |
 
 ### phase 1 — fetch layer
 | task                          | status      | PR    | notes |
@@ -114,6 +121,22 @@ update after each session / PR merge.
 - wrote Claude Code agent build prompt
 - established cross-platform strategy (Node.js primary, Python wrapper)
 - confirmed MCP as primary agent protocol
+
+### 2026-06-13 — Phase 0 scaffold
+- rebranded WebScout → Rawfy (CLI: rawfy, format: RFM, env: RAWFY_*)
+- package name: rawfy (not rawfy-skill)
+- initialized npm package with ESM, TypeScript 6.0 strict mode
+- configured tsup with 4 entry points (cli, server-mcp, server-api, index)
+- set up ESLint v9 flat config + Prettier
+- set up Vitest with separate unit/integration configs
+- created full src/ directory structure (24 stub modules)
+- implemented src/types.ts — complete type registry (180+ lines)
+- implemented src/utils/errors.ts — error factory (createError, wrapError, isRawfyError)
+- implemented src/utils/truncate.ts — token estimation + truncation
+- wrote 18 tests (errors: 12, truncate: 6) — all passing
+- created GitHub Actions CI (3 OS × 3 Node versions)
+- pushed to github.com/rishiiicreates/rawfy on dev branch
+- verified: build ✅ typecheck ✅ tests ✅ lint ✅ format ✅
 
 ---
 

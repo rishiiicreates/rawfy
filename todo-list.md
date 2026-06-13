@@ -10,16 +10,16 @@
 
 ## phase 0 — project setup
 
-- [ ] init npm package: `npm init -y`
-- [ ] configure TypeScript: `tsconfig.json` (strict, ESM, target ES2022)
-- [ ] configure build: `tsup` (bundle CLI, MCP server, API server)
-- [ ] add `.gitignore` (node_modules, dist, .env, chromium)
-- [ ] create `src/` directory structure (see TECHSTACK.md)
-- [ ] add eslint + prettier config
-- [ ] add vitest for testing
-- [ ] write `package.json` scripts: build, dev, test, start:mcp, start:api
-- [ ] set up GitHub repo: `webscout-skill`
-- [ ] add GitHub Actions CI: test on ubuntu, macos, windows
+- [x] init npm package: `rawfy@0.1.0` (ESM, Node >=18)
+- [x] configure TypeScript: `tsconfig.json` (strict, ESM, target ES2022, TS6 compat)
+- [x] configure build: `tsup` (bundle CLI, MCP server, API server, library index)
+- [x] add `.gitignore` (node_modules, dist, .env, chromium)
+- [x] create `src/` directory structure (see TECHSTACK.md) — 24 modules
+- [x] add eslint + prettier config (flat config, strict type-checked)
+- [x] add vitest for testing (unit + integration separation)
+- [x] write `package.json` scripts: build, dev, test, start:mcp, start:api, typecheck, lint, format
+- [x] set up GitHub repo: `github.com/rishiiicreates/rawfy`
+- [x] add GitHub Actions CI: test on ubuntu, macos, windows (×3 Node versions)
 
 ---
 
