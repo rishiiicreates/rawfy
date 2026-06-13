@@ -18,6 +18,9 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': 'off',
       // TODO: re-enable after Phase 3 when async stubs are implemented
       '@typescript-eslint/require-await': 'off',
+      // RawfyError is a structured object (not extending Error) by design.
+      // See workflow.md error handling convention.
+      '@typescript-eslint/only-throw-error': 'off',
     },
   },
   { ignores: ['dist/', 'node_modules/', '*.config.*'] },
