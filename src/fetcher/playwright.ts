@@ -4,23 +4,240 @@
  * Tier 2 fetch using Playwright Chromium for JS-rendered pages.
  * Only invoked when the detection heuristic indicates the page needs JS.
  *
- * TODO: Phase 1 implementation
+ * Performance optimizations:
+ * - Blocks images, fonts, and stylesheets to reduce load time
+ * - Uses networkidle wait strategy with a hard timeout
+ * - Single browser context per fetch (no persistent state)
  */
 
-import type { FetchOptions, FetchResult } from '../types.js'
+import type { FetchOptions, FetchResult, VideoCaptionTrack } from '../types.js'
+import { createError, wrapError } from '../utils/errors.js'
+
+/** Default Playwright page timeout (ms) */
+const DEFAULT_PW_TIMEOUT_MS = 10_000
+
+/** Resource types to block for faster page loads */
+const BLOCKED_RESOURCE_TYPES = new Set(['image', 'font', 'stylesheet', 'media'])
+
+/**
+ * Default browser User-Agent.
+ * Playwright already sets a realistic UA, but we override to match
+ * our static fetcher for consistency.
+ */
+const DEFAULT_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 
 /**
  * Fetch a URL using Playwright headless Chromium.
  *
  * - Launches Chromium in headless mode
  * - Blocks images, fonts, stylesheets for faster load
- * - Waits for networkidle or 10s timeout
+ * - Waits for networkidle or timeout
  * - Extracts full rendered HTML
  * - Extracts native video captions via textTracks JS evaluation
  * - Closes browser after fetch
- * - Handles navigation errors, SSL errors, timeout
+ *
+ * @throws {RawfyError} PLAYWRIGHT_NOT_INSTALLED — Chromium not found
+ * @throws {RawfyError} PLAYWRIGHT_FAILED — navigation or rendering error
+ * @throws {RawfyError} FETCH_TIMEOUT — page load exceeded timeout
  */
-export async function fetchPlaywright(_url: string, _options?: FetchOptions): Promise<FetchResult> {
-  // TODO: implement in Phase 1
-  throw new Error('fetchPlaywright not implemented')
+export async function fetchPlaywright(url: string, options?: FetchOptions): Promise<FetchResult> {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_PW_TIMEOUT_MS
+  const userAgent = options?.userAgent ?? DEFAULT_USER_AGENT
+
+  // Dynamic import — Playwright is a heavy dependency and may not be installed.
+  // Using dynamic import means the module loads fast when Playwright isn't needed.
+  let chromium: typeof import('playwright').chromium
+  try {
+    const pw = await import('playwright')
+    chromium = pw.chromium
+  } catch {
+    throw createError(
+      'PLAYWRIGHT_NOT_INSTALLED',
+      'Playwright is not installed. Run: rawfy install',
+      url,
+    )
+  }
+
+  const startTime = performance.now()
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null
+
+  try {
+    // Launch browser — headless, no sandbox (for CI/Docker compatibility)
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+    })
+
+    const context = await browser.newContext({
+      userAgent,
+      // Disable JavaScript-based geolocation/permission prompts
+      ignoreHTTPSErrors: true,
+    })
+
+    const page = await context.newPage()
+
+    // Block heavy resources to speed up page load
+    await page.route('**/*', (route) => {
+      const resourceType = route.request().resourceType()
+      if (BLOCKED_RESOURCE_TYPES.has(resourceType)) {
+        return route.abort()
+      }
+      return route.continue()
+    })
+
+    // Navigate with networkidle wait — this waits until there are no more
+    // than 0 network connections for at least 500ms
+    const response = await page.goto(url, {
+      waitUntil: 'networkidle',
+      timeout: timeoutMs,
+    })
+
+    if (!response) {
+      throw createError('PLAYWRIGHT_FAILED', 'Navigation returned no response', url)
+    }
+
+    // Extract the fully rendered HTML
+    const html = await page.content()
+
+    // Extract the final URL (after any client-side redirects)
+    const finalUrl = page.url()
+
+    // Extract response headers from the main navigation response
+    const responseHeaders = response.headers()
+    const headers: Record<string, string> = {}
+    for (const [key, value] of Object.entries(responseHeaders)) {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- response.headers() values could be undefined at runtime
+      if (value !== undefined) {
+        headers[key] = value
+      }
+    }
+
+    // Extract native video captions via the TextTrack API
+    const videoCaptions = await extractVideoCaptions(page)
+
+    const durationMs = Math.round(performance.now() - startTime)
+
+    return {
+      html,
+      finalUrl,
+      headers,
+      method: 'playwright',
+      durationMs,
+      ...(videoCaptions.length > 0 && { videoCaptions }),
+    }
+  } catch (err: unknown) {
+    // Re-throw existing RawfyErrors
+    if (err !== null && typeof err === 'object' && 'code' in err) {
+      const rawfyErr = err as { code: string }
+      if (rawfyErr.code === 'PLAYWRIGHT_FAILED' || rawfyErr.code === 'PLAYWRIGHT_NOT_INSTALLED') {
+        throw err
+      }
+    }
+
+    // Detect Playwright timeout
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw createError(
+        'FETCH_TIMEOUT',
+        `Playwright timed out loading ${url} after ${timeoutMs}ms`,
+        url,
+        { timeoutMs },
+      )
+    }
+
+    // Detect Chromium not installed (Playwright throws a specific error)
+    if (
+      err instanceof Error &&
+      (err.message.includes("Executable doesn't exist") ||
+        err.message.includes('browserType.launch'))
+    ) {
+      throw createError(
+        'PLAYWRIGHT_NOT_INSTALLED',
+        'Playwright Chromium browser not found. Run: rawfy install',
+        url,
+        { originalMessage: err.message },
+      )
+    }
+
+    throw wrapError('PLAYWRIGHT_FAILED', err, url)
+  } finally {
+    // Always close the browser to prevent zombie processes
+    if (browser) {
+      await browser.close().catch(() => {
+        // Swallow close errors — we're in cleanup
+      })
+    }
+  }
+}
+
+/**
+ * Extract video captions from the page using the TextTrack API.
+ *
+ * Uses a string-based evaluate expression because the callback executes in the
+ * BROWSER context where DOM globals exist. Our Node.js tsconfig correctly excludes
+ * the 'dom' lib, so we avoid type conflicts by passing raw JS as a string.
+ *
+ * Returns an empty array if no video elements or captions are found.
+ */
+async function extractVideoCaptions(page: {
+  evaluate: (expression: string) => Promise<unknown>
+}): Promise<VideoCaptionTrack[]> {
+  try {
+    const raw = await page.evaluate(`
+      (() => {
+        const videos = document.querySelectorAll('video');
+        const results = [];
+
+        for (const video of videos) {
+          const tracks = video.textTracks;
+          for (let i = 0; i < tracks.length; i++) {
+            const track = tracks[i];
+            if (
+              track &&
+              (track.kind === 'captions' || track.kind === 'subtitles') &&
+              track.cues
+            ) {
+              const cueTexts = [];
+              for (let j = 0; j < track.cues.length; j++) {
+                const cue = track.cues[j];
+                if (cue && 'text' in cue) {
+                  cueTexts.push(cue.text);
+                }
+              }
+
+              if (cueTexts.length > 0) {
+                results.push({
+                  lang: track.language || 'unknown',
+                  text: cueTexts.join(' '),
+                  label: track.label || undefined,
+                });
+              }
+            }
+          }
+        }
+
+        return results;
+      })()
+    `)
+
+    // Validate shape of returned data
+    if (!Array.isArray(raw)) return []
+
+    return (raw as Array<Record<string, unknown>>).filter(
+      (item): item is { lang: string; text: string; label?: string } =>
+        typeof item === 'object' &&
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime validation of browser-evaluated data
+        item !== null &&
+        typeof item['lang'] === 'string' &&
+        typeof item['text'] === 'string',
+    )
+  } catch {
+    // Caption extraction is best-effort — don't fail the whole fetch
+    return []
+  }
 }

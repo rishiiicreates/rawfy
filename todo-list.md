@@ -25,32 +25,36 @@
 
 ## phase 1 — fetch layer
 
-- [ ] implement `src/fetcher/static.ts`
-  - [ ] undici-based HTTP GET
-  - [ ] follow redirects (max 5)
-  - [ ] set realistic User-Agent header
-  - [ ] handle gzip/brotli decompression
-  - [ ] timeout: 15 seconds
-  - [ ] return: raw HTML string + response headers + final URL
+- [x] implement `src/fetcher/static.ts`
+  - [x] undici-based HTTP GET (Node.js built-in fetch)
+  - [x] follow redirects (redirect: 'follow' + manual redirect-limit variant)
+  - [x] set realistic User-Agent header (Chrome 125 on macOS)
+  - [x] handle gzip/brotli decompression (automatic via fetch)
+  - [x] timeout: 15 seconds (via AbortSignal.timeout)
+  - [x] return: raw HTML string + response headers + final URL
   
-- [ ] implement `src/utils/detect.ts`
-  - [ ] parse HTML with lightweight regex heuristic
-  - [ ] detect: Next.js (`__NEXT_DATA__`), React (`data-reactroot`), Vue (`data-v-`)
-  - [ ] detect: empty body (less than 500 chars of text)
-  - [ ] return: `{ needsPlaywright: boolean, reason: string }`
+- [x] implement `src/utils/detect.ts`
+  - [x] parse HTML with lightweight regex heuristic
+  - [x] detect: Next.js, React, Vue, Angular, Svelte, Gatsby, Nuxt, Remix, Ember
+  - [x] detect: empty body (less than 500 chars of text)
+  - [x] detect: app shell pattern (empty root div)
+  - [x] conservative: framework + sparse content = Playwright, framework alone = SSR
+  - [x] return: `{ needsPlaywright: boolean, reason: string }`
 
-- [ ] implement `src/fetcher/playwright.ts`
-  - [ ] launch Chromium headless
-  - [ ] block: images, fonts, stylesheets (load faster)
-  - [ ] wait for: `networkidle` or 10s timeout
-  - [ ] extract full rendered HTML
-  - [ ] extract: native video captions via `textTracks` JS evaluation
-  - [ ] close browser after fetch
-  - [ ] handle: navigation errors, SSL errors, timeout
+- [x] implement `src/fetcher/playwright.ts`
+  - [x] launch Chromium headless (dynamic import for lazy loading)
+  - [x] block: images, fonts, stylesheets (load faster)
+  - [x] wait for: `networkidle` or 10s timeout
+  - [x] extract full rendered HTML
+  - [x] extract: native video captions via `textTracks` JS evaluation
+  - [x] close browser after fetch (finally block)
+  - [x] handle: navigation errors, SSL errors, timeout, not-installed
 
-- [ ] implement `src/fetcher/index.ts`
-  - [ ] route to static or Playwright based on detector
-  - [ ] expose unified `fetchPage(url, options)` function
+- [x] implement `src/fetcher/index.ts`
+  - [x] route to static or Playwright based on detector
+  - [x] expose unified `fetchPage(url, options)` function
+  - [x] graceful fallback: Playwright failure → static result
+  - [x] progress callbacks for CLI feedback
 
 ---
 
