@@ -112,7 +112,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
     const responseHeaders = response.headers()
     const headers: Record<string, string> = {}
     for (const [key, value] of Object.entries(responseHeaders)) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- response.headers() values could be undefined at runtime
+       
       if (value !== undefined) {
         headers[key] = value
       }
@@ -231,7 +231,7 @@ async function extractVideoCaptions(page: {
     return (raw as Array<Record<string, unknown>>).filter(
       (item): item is { lang: string; text: string; label?: string } =>
         typeof item === 'object' &&
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime validation of browser-evaluated data
+         
         item !== null &&
         typeof item['lang'] === 'string' &&
         typeof item['text'] === 'string',
