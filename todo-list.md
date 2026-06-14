@@ -103,28 +103,33 @@
 
 ## phase 3 — media pipeline
 
-- [ ] implement `src/media/image.ts`
-  - [ ] priority 1: return alt attribute if non-empty and meaningful
-  - [ ] priority 2: return title + figcaption if alt missing
-  - [ ] priority 3 (opt-in): run tesseract.js OCR on image URL
-  - [ ] priority 4 (opt-in --vision): call Anthropic API with image
-  - [ ] format output: `[IMAGE: {description} | src: {url}]`
+- [x] implement `src/media/image.ts`
+  - [x] priority 1: return alt attribute if non-empty and meaningful
+  - [x] priority 2: return title + figcaption if alt missing
+  - [x] priority 3 (opt-in): run tesseract.js OCR on image URL
+  - [x] priority 4 (opt-in --vision): call Anthropic API with image (claude-sonnet-4-6)
+  - [x] format output: `[IMAGE: {description} | src: {url}]`
+  - [x] tracking pixel filtering, placeholder alt detection
 
-- [ ] implement `src/media/video.ts`
-  - [ ] check if YouTube URL → fetch transcript via YouTube API or yt-dlp
-  - [ ] check for native `<track kind="captions">` elements
-  - [ ] extract video metadata: title, duration, description
-  - [ ] format output: `[VIDEO: {duration} | "{title}" | transcript: {text|unavailable}]`
+- [x] implement `src/media/video.ts`
+  - [x] YouTube embed + page URL detection → oEmbed metadata + transcript scraping
+  - [x] Vimeo embed extraction
+  - [x] native `<video>` + `<source>` elements
+  - [x] Playwright caption track integration
+  - [x] format output: `[VIDEO: {duration} | "{title}" | transcript: {text|unavailable}]`
 
-- [ ] implement `src/media/audio.ts`
-  - [ ] extract audio element metadata
-  - [ ] look for transcript link nearby in DOM
-  - [ ] format output: `[AUDIO: "{title}" | {duration} | transcript: {text|unavailable}]`
+- [x] implement `src/media/audio.ts`
+  - [x] extract audio element metadata (src, title, aria-label)
+  - [x] nearby heading detection (DOM tree walk)
+  - [x] transcript link detection (text + href matching)
+  - [x] format output: `[AUDIO: "{title}" | {duration} | transcript: {text|unavailable}]`
 
-- [ ] implement `src/media/pdf.ts`
-  - [ ] detect PDF URLs in page links
-  - [ ] fetch and extract text with pdfjs-dist
-  - [ ] format output: `[PDF: "{title}" | {pages} pages | text: {extracted}]`
+- [x] implement `src/media/pdf.ts`
+  - [x] detect PDF URLs in page links (.pdf, .pdf?, /pdf/)
+  - [x] fetch and extract text with pdfjs-dist (dynamic import)
+  - [x] PDF metadata (title from metadata or filename, page count)
+  - [x] configurable limits (maxPdfs, maxPages), URL deduplication
+  - [x] format output: `[PDF: "{title}" | {pages} pages | text: {extracted}]`
 
 ---
 

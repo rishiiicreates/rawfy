@@ -63,10 +63,11 @@ update after each session / PR merge.
 ### phase 3 — media pipeline
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| image handler                | not started | —     | —     |
-| video handler                | not started | —     | —     |
-| audio handler                | not started | —     | —     |
-| PDF handler                  | not started | —     | —     |
+| image handler                | ✓ done      | —     | alt → figcaption → OCR → Vision API, pixel filtering |
+| video handler                | ✓ done      | —     | YouTube/Vimeo embeds, native video, transcript scraping |
+| audio handler                | ✓ done      | —     | metadata, nearby heading, transcript link detection |
+| PDF handler                  | ✓ done      | —     | pdfjs-dist text extraction, metadata, deduplication |
+| tests (46 new)               | ✓ done      | —     | 161 total (image:14, video:12, audio:12, pdf:8) |
 
 ### phase 4 — output serializers
 | task                          | status      | PR    | notes |
