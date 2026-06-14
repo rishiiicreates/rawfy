@@ -72,18 +72,20 @@ update after each session / PR merge.
 ### phase 4 — output serializers
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| WSM serializer               | not started | —     | —     |
-| JSON serializer              | not started | —     | —     |
-| text serializer              | not started | —     | —     |
-| token truncator              | not started | —     | —     |
+| WSM serializer               | ✓ done      | —     | YAML frontmatter + markdown + media/interactive sections |
+| JSON serializer              | ✓ done      | —     | snake_case keys, null for missing, pretty-printed |
+| text serializer              | ✓ done      | —     | UPPERCASE headings, stripped formatting, bullets |
+| token truncator              | ✓ done      | —     | Phase 0 implementation, 6 tests |
+| pipeline orchestrator        | ✓ done      | —     | 7-stage rawfyFetch() + rawfyMetadata() |
+| tests (19 new)               | ✓ done      | —     | 180 total (wsm:7, json:6, text:6) |
 
 ### phase 5 — interfaces
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| CLI (commander)              | not started | —     | —     |
-| MCP server (stdio)           | not started | —     | —     |
-| MCP server (SSE)             | not started | —     | —     |
-| REST API (hono)              | not started | —     | —     |
+| CLI                          | ✓ done      | —     | 5 commands, all flags, pipe-friendly, shorthand |
+| MCP server (stdio)           | ✓ done      | —     | McpServer + Zod, rawfy_fetch + rawfy_metadata |
+| REST API (Hono)              | ✓ done      | —     | /fetch, /metadata, /health, /version, CORS |
+| public API exports           | ✓ done      | —     | full export surface in src/index.ts |
 
 ### phase 6 — python wrapper
 | task                          | status      | PR    | notes |

@@ -135,55 +135,52 @@
 
 ## phase 4 — output serializers
 
-- [ ] implement `src/output/wsm.ts`
-  - [ ] build YAML frontmatter from metadata
-  - [ ] combine with markdown body
-  - [ ] inject media element descriptions
-  - [ ] inject interactive elements section at end
-  - [ ] return: full WSM string
+- [x] implement `src/output/wsm.ts`
+  - [x] build YAML frontmatter from metadata
+  - [x] combine with markdown body
+  - [x] inject media element descriptions
+  - [x] inject interactive elements section at end
+  - [x] return: full WSM string
 
-- [ ] implement `src/output/json.ts`
-  - [ ] structured JSON output
-  - [ ] schema: `{ metadata, content, media[], interactive_elements[], raw_markdown }`
+- [x] implement `src/output/json.ts`
+  - [x] structured JSON output (snake_case keys)
+  - [x] schema: `{ metadata, content, media[], interactive_elements[], fetch_stats }`
 
-- [ ] implement `src/output/text.ts`
-  - [ ] strip all markdown syntax
-  - [ ] keep: headings as UPPERCASE, links as `text (url)`
-  - [ ] strip: media placeholders, images, formatting
-  - [ ] return: minimal plain text
+- [x] implement `src/output/text.ts`
+  - [x] strip all markdown syntax
+  - [x] keep: headings as UPPERCASE, links as `text (url)`
+  - [x] strip: media placeholders, images, formatting
+  - [x] return: minimal plain text
 
-- [ ] implement `src/utils/truncate.ts`
-  - [ ] estimate token count (characters / 4)
-  - [ ] truncate at max_tokens with notice: `[TRUNCATED at {n} tokens]`
+- [x] implement `src/utils/truncate.ts` (Phase 0)
+  - [x] estimate token count (characters / 4)
+  - [x] truncate at max_tokens with notice
+
+- [x] implement `src/pipeline.ts`
+  - [x] rawfyFetch() 7-stage orchestrator
+  - [x] rawfyMetadata() lightweight fetch
 
 ---
 
 ## phase 5 — interfaces
 
-- [ ] implement `src/cli.ts`
-  - [ ] `webscout fetch <url>` command
-  - [ ] all flags: --format, --vision, --no-playwright, --max-tokens, --out
-  - [ ] pipe-friendly: exit 0 on success, exit 1 on error, errors to stderr
-  - [ ] `webscout serve` command → start MCP stdio server
-  - [ ] `webscout api` command → start REST API
-  - [ ] `webscout install` command → `npx playwright install chromium`
-  - [ ] `webscout version` command
+- [x] implement `src/cli.ts`
+  - [x] `rawfy fetch <url>` command + shorthand
+  - [x] all flags: --format, --vision, --no-playwright, --max-tokens, --out
+  - [x] pipe-friendly: exit 0/1, errors to stderr
+  - [x] `rawfy serve` / `rawfy api` / `rawfy install` / `rawfy version`
 
-- [ ] implement `src/server-mcp.ts`
-  - [ ] use @modelcontextprotocol/sdk Server class
-  - [ ] register tool: `webscout_fetch`
-  - [ ] register tool: `webscout_metadata`
-  - [ ] implement stdio transport
-  - [ ] implement SSE transport (--transport sse flag)
-  - [ ] proper error responses in MCP format
+- [x] implement `src/server-mcp.ts`
+  - [x] McpServer high-level API + Zod schemas
+  - [x] registerTool: `rawfy_fetch`, `rawfy_metadata`
+  - [x] stdio transport + error handling
 
-- [ ] implement `src/server-api.ts`
-  - [ ] Hono app
-  - [ ] GET /fetch with url + format query params
-  - [ ] GET /metadata with url query param
-  - [ ] GET /health → `{ status: "ok", version }`
-  - [ ] GET /version → `{ version }`
-  - [ ] CORS headers (for browser-based agent UIs)
+- [x] implement `src/server-api.ts`
+  - [x] Hono + @hono/node-server
+  - [x] GET /fetch, /metadata, /health, /version
+  - [x] CORS headers
+
+- [x] implement `src/index.ts` — full public API export surface
 
 ---
 
@@ -235,8 +232,8 @@
 ## phase 9 — packaging and release
 
 - [ ] build: `tsup` bundle for CLI + servers
-- [ ] test `npm install -g webscout-skill` on fresh machine
-- [ ] test `pip install webscout-skill` on fresh machine
+- [ ] test `npm install -g rawfy` on fresh machine
+- [ ] test `pip install rawfy` on fresh machine
 - [ ] write `README.md` (install + quickstart + all commands)
 - [ ] write `CHANGELOG.md`
 - [ ] publish to npm: `npm publish`
