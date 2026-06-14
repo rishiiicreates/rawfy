@@ -64,7 +64,9 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "jsdom": "^29.1.1",
+    "pdfjs-dist": "^6.0.227",
     "playwright": "^1.60.0",
+    "tesseract.js": "^7.0.0",
     "turndown": "^7.2.4"
   }
 }

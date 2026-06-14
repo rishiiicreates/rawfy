@@ -112,7 +112,6 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
     const responseHeaders = response.headers()
     const headers: Record<string, string> = {}
     for (const [key, value] of Object.entries(responseHeaders)) {
-       
       if (value !== undefined) {
         headers[key] = value
       }
@@ -231,7 +230,6 @@ async function extractVideoCaptions(page: {
     return (raw as Array<Record<string, unknown>>).filter(
       (item): item is { lang: string; text: string; label?: string } =>
         typeof item === 'object' &&
-         
         item !== null &&
         typeof item['lang'] === 'string' &&
         typeof item['text'] === 'string',
