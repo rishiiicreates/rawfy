@@ -53,10 +53,12 @@ update after each session / PR merge.
 ### phase 2 — extraction layer
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| Readability wrapper          | not started | —     | —     |
-| metadata extractor           | not started | —     | —     |
-| interactive element extractor| not started | —     | —     |
-| HTML → markdown converter    | not started | —     | —     |
+| Readability wrapper          | ✓ done      | —     | @mozilla/readability + jsdom, body fallback |
+| metadata extractor           | ✓ done      | —     | title, OG, JSON-LD, lang, word count, page type |
+| page type classifier         | ✓ done      | —     | JSON-LD → OG → URL → content chain, 7 types |
+| interactive element extractor| ✓ done      | —     | buttons, forms, inputs, selects, links |
+| HTML → markdown converter    | ✓ done      | —     | Turndown + 9 custom rules |
+| tests (60 new)               | ✓ done      | —     | 115 total (readability:7, metadata:17, interactive:13, md:23) |
 
 ### phase 3 — media pipeline
 | task                          | status      | PR    | notes |

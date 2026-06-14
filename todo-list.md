@@ -60,44 +60,44 @@
 
 ## phase 2 — extraction layer
 
-- [ ] implement `src/extractor/readability.ts`
-  - [ ] wrap @mozilla/readability
-  - [ ] create jsdom document from HTML (for static fetches)
-  - [ ] run Readability on document
-  - [ ] handle failure (non-article pages): fall back to full body extraction
-  - [ ] return: `{ title, content (HTML), excerpt, byline, siteName }`
+- [x] implement `src/extractor/readability.ts`
+  - [x] wrap @mozilla/readability
+  - [x] create jsdom document from HTML (for static fetches)
+  - [x] run Readability on document
+  - [x] handle failure (non-article pages): fall back to full body extraction
+  - [x] return: `{ title, content (HTML), excerpt, byline, siteName }`
 
-- [ ] implement `src/extractor/metadata.ts`
-  - [ ] extract: `<title>`, `<meta name="description">`
-  - [ ] extract all `<meta property="og:*">` tags
-  - [ ] extract all `<meta name="twitter:*">` tags
-  - [ ] find and parse `<script type="application/ld+json">` blocks
-  - [ ] detect page language: `<html lang>` or `content-language` header
-  - [ ] classify page type (see RESEARCH.md heuristics)
-  - [ ] calculate word count and reading time
-  - [ ] return: full metadata object
+- [x] implement `src/extractor/metadata.ts`
+  - [x] extract: `<title>`, `<meta name="description">`
+  - [x] extract all `<meta property="og:*">` tags
+  - [x] extract all `<meta name="twitter:*">` tags (via OG fallback)
+  - [x] find and parse `<script type="application/ld+json">` blocks
+  - [x] detect page language: `<html lang>` or `content-language` header
+  - [x] classify page type (via src/utils/classify.ts — JSON-LD → OG → URL → content)
+  - [x] calculate word count and reading time
+  - [x] return: full metadata object
 
-- [ ] implement `src/extractor/interactive.ts`
-  - [ ] find all `<button>` elements → extract label, type, aria-label
-  - [ ] find all `<form>` elements → extract name, action, fields
-  - [ ] find all `<input>` → extract type, name, placeholder, label
-  - [ ] find all `<select>` → extract name, options
-  - [ ] find all `<a>` with href → classify as navigation vs content link
-  - [ ] return: array of interactive elements with type + label + context
+- [x] implement `src/extractor/interactive.ts`
+  - [x] find all `<button>` elements → extract label, type, aria-label
+  - [x] find all `<form>` elements → extract name, action, fields
+  - [x] find all `<input>` → extract type, name, placeholder, label
+  - [x] find all `<select>` → extract name, options
+  - [x] find all `<a>` with href → classify as navigation vs content link
+  - [x] return: array of interactive elements with type + label + context
 
-- [ ] implement `src/extractor/html-to-md.ts`
-  - [ ] configure Turndown with:
-    - [ ] custom rule: `<img>` → `[IMAGE: {alt} | src: {src}]`
-    - [ ] custom rule: `<video>` → `[VIDEO: {metadata}]`
-    - [ ] custom rule: `<audio>` → `[AUDIO: {metadata}]`
-    - [ ] custom rule: `<figure>` → preserve with figcaption
-    - [ ] custom rule: `<details>/<summary>` → preserve
-    - [ ] custom rule: `<code>` → inline backticks
-    - [ ] custom rule: `<pre><code>` → fenced blocks with lang
-    - [ ] custom rule: `<table>` → proper markdown table
-    - [ ] standard: `<a>` → `[text](url)` keeping relative URLs resolved
-  - [ ] resolve relative URLs against base URL
-  - [ ] return: markdown string
+- [x] implement `src/extractor/html-to-md.ts`
+  - [x] configure Turndown with:
+    - [x] custom rule: `<img>` → `[IMAGE: {alt} | src: {src}]`
+    - [x] custom rule: `<video>` → `[VIDEO: {metadata}]`
+    - [x] custom rule: `<audio>` → `[AUDIO: {metadata}]`
+    - [x] custom rule: `<figure>` → preserve with figcaption
+    - [x] custom rule: `<details>/<summary>` → preserve
+    - [x] custom rule: `<code>` → inline backticks
+    - [x] custom rule: `<pre><code>` → fenced blocks with lang
+    - [x] custom rule: `<table>` → proper markdown table (recursive node walk)
+    - [x] standard: `<a>` → `[text](url)` keeping relative URLs resolved
+  - [x] resolve relative URLs against base URL
+  - [x] return: markdown string
 
 ---
 
