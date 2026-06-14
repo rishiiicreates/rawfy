@@ -62,7 +62,10 @@
     "vitest": "^4.1.8"
   },
   "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@mozilla/readability": "^0.6.0",
+    "hono": "^4.12.25",
     "jsdom": "^29.1.1",
     "pdfjs-dist": "^6.0.227",
     "playwright": "^1.60.0",
