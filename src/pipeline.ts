@@ -105,7 +105,7 @@ export async function rawfyFetch(
       anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
     })
     media.push(...images)
-  } catch (e) {
+  } catch {
     // Ignore image extraction failure
   }
 
@@ -116,21 +116,21 @@ export async function rawfyFetch(
       fetchResult.videoCaptions,
     )
     media.push(...videos)
-  } catch (e) {
+  } catch {
     // Ignore video extraction failure
   }
 
   try {
     const audio = extractAudio(fetchResult.html, fetchResult.finalUrl)
     media.push(...audio)
-  } catch (e) {
+  } catch {
     // Ignore audio extraction failure
   }
 
   try {
     const pdfs = await extractPdfs(fetchResult.html, fetchResult.finalUrl)
     media.push(...pdfs)
-  } catch (e) {
+  } catch {
     // Ignore pdf extraction failure
   }
 
