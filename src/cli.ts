@@ -71,6 +71,7 @@ async function handleFetch(args: string[]): Promise<void> {
   const format = (flags['format'] || flags['f'] || 'markdown') as OutputFormat
   const vision = flags['vision'] !== undefined
   const noPlaywright = flags['no-playwright'] !== undefined
+  const forcePlaywright = flags['force-playwright'] !== undefined
   const maxTokens = flags['max-tokens'] ? parseInt(flags['max-tokens'], 10) : undefined
   const outFile = flags['out'] || flags['o']
 
@@ -83,7 +84,7 @@ async function handleFetch(args: string[]): Promise<void> {
   try {
     const output = await rawfyFetch(
       url,
-      { format, vision, noPlaywright, maxTokens },
+      { format, vision, noPlaywright, forcePlaywright, maxTokens },
       progress,
     )
 

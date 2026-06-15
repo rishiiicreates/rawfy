@@ -58,6 +58,7 @@ export async function rawfyFetch(
   log('fetching page...')
   const fetchResult = await fetchPage(url, {
     noPlaywright: options.noPlaywright,
+    forcePlaywright: options.forcePlaywright,
     timeoutMs: 15_000,
     onProgress: log,
   })

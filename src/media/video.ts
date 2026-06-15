@@ -12,6 +12,7 @@
  */
 
 import { JSDOM } from 'jsdom'
+import { YoutubeTranscript } from 'youtube-transcript'
 import type { VideoResult, VideoCaptionTrack } from '../types.js'
 
 /**
@@ -185,54 +186,12 @@ async function buildYouTubeResult(videoId: string): Promise<VideoResult> {
  */
 async function fetchYouTubeTranscript(videoId: string): Promise<string | null> {
   try {
-    // Fetch the video page to find caption tracks
-    const pageUrl = `https://www.youtube.com/watch?v=${videoId}`
-    const response = await fetch(pageUrl, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      },
-    })
+    const transcript = await YoutubeTranscript.fetchTranscript(videoId)
+    if (!transcript || transcript.length === 0) return null
 
-    if (!response.ok) return null
-
-    const html = await response.text()
-
-    // Look for captions URL in the page source
-    const captionMatch = html.match(/"captionTracks":\[.*?"baseUrl":"(.*?)"/s)
-    if (!captionMatch?.[1]) return null
-
-    // Decode the URL (it's JSON-escaped)
-    const captionUrl = captionMatch[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/')
-
-    // Fetch the actual captions
-    const captionResponse = await fetch(captionUrl, {
-      signal: AbortSignal.timeout(5000),
-    })
-
-    if (!captionResponse.ok) return null
-
-    const captionXml = await captionResponse.text()
-
-    // Parse caption XML and extract text
-    const textSegments = captionXml.match(/<text[^>]*>(.*?)<\/text>/gs)
-    if (!textSegments || textSegments.length === 0) return null
-
-    const text = textSegments
-      .map((segment) => {
-        // Strip XML tags and decode entities
-        return segment
-          .replace(/<[^>]+>/g, '')
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/\n/g, ' ')
-          .trim()
-      })
-      .filter((s) => s.length > 0)
+    const text = transcript
+      .map((t) => t.text.replace(/\n/g, ' ').trim())
+      .filter((t) => t.length > 0)
       .join(' ')
 
     return text.length > 10 ? text : null

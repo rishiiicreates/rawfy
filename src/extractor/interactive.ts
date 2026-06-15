@@ -45,6 +45,71 @@ export function extractInteractiveElements(html: string, url: string): Interacti
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function isGibberish(text: string): boolean {
+  // Matches React generated IDs like :R1sq8q6: or :r1:
+  return /^:[a-zA-Z0-9_-]+:$/.test(text)
+}
+
+function resolveLabel(
+  element: Element,
+  doc: Document,
+  fallback: string,
+  extra?: { checkValue?: boolean; checkPlaceholder?: boolean; checkNameAndId?: boolean }
+): string {
+  // 1. aria-label
+  const ariaLabel = element.getAttribute('aria-label')
+  if (ariaLabel && !isGibberish(ariaLabel)) return ariaLabel.trim()
+
+  // 2. Inner Text
+  const textContent = element.textContent?.trim().replace(/\s+/g, ' ')
+  if (textContent && !isGibberish(textContent)) return textContent
+
+  // 3. title attribute
+  const title = element.getAttribute('title')
+  if (title && !isGibberish(title)) return title.trim()
+
+  // 4. value attribute (for inputs)
+  if (extra?.checkValue) {
+    const value = element.getAttribute('value')
+    if (value && !isGibberish(value)) return value.trim()
+  }
+
+  // 5. placeholder attribute
+  if (extra?.checkPlaceholder) {
+    const placeholder = element.getAttribute('placeholder')
+    if (placeholder && !isGibberish(placeholder)) return placeholder.trim()
+  }
+
+  // 6. Associated <label>
+  const id = element.getAttribute('id')
+  if (id) {
+    // Avoid syntax errors in querySelector if ID contains weird characters
+    try {
+      const escapedId = id.replace(/"/g, '\\"')
+      const labelElem = doc.querySelector(`label[for="${escapedId}"]`)
+      if (labelElem) {
+        const labelText = labelElem.textContent?.trim().replace(/\s+/g, ' ')
+        if (labelText && !isGibberish(labelText)) return labelText
+      }
+    } catch {
+      // Ignore querySelector errors
+    }
+  }
+
+  // 7. name or id attributes fallback
+  if (extra?.checkNameAndId) {
+    const name = element.getAttribute('name')
+    if (name && !isGibberish(name)) return name.trim()
+    if (id && !isGibberish(id)) return id.trim()
+  }
+
+  return fallback
+}
+
+// ---------------------------------------------------------------------------
 // Element extractors
 // ---------------------------------------------------------------------------
 
@@ -55,9 +120,7 @@ function extractButtons(doc: Document, results: InteractiveElement[]): void {
   // <button> elements
   const buttons = doc.querySelectorAll('button')
   for (const btn of buttons) {
-    const label =
-      btn.getAttribute('aria-label') || btn.textContent?.trim() || btn.getAttribute('title') || ''
-
+    const label = resolveLabel(btn, doc, '')
     if (!label) continue
 
     results.push({
@@ -70,7 +133,7 @@ function extractButtons(doc: Document, results: InteractiveElement[]): void {
   // <input type="submit"> and <input type="button">
   const submitInputs = doc.querySelectorAll('input[type="submit"], input[type="button"]')
   for (const input of submitInputs) {
-    const label = input.getAttribute('value') || input.getAttribute('aria-label') || 'Submit'
+    const label = resolveLabel(input, doc, 'Submit', { checkValue: true })
 
     results.push({
       type: 'button',
@@ -104,17 +167,16 @@ function extractForms(doc: Document, url: string, results: InteractiveElement[])
     for (const input of inputs) {
       const name =
         input.getAttribute('name') ||
-        input.getAttribute('id') ||
         input.getAttribute('placeholder') ||
-        input.getAttribute('aria-label')
-      if (name) fields.push(name)
+        input.getAttribute('aria-label') ||
+        input.getAttribute('id')
+      if (name && !isGibberish(name)) fields.push(name)
     }
 
     // Form label: aria-label, name attr, or generated from fields
-    const label =
-      form.getAttribute('aria-label') ||
-      form.getAttribute('name') ||
-      (fields.length > 0 ? `Form with: ${fields.slice(0, 3).join(', ')}` : 'Form')
+    let formLabel = form.getAttribute('aria-label') || form.getAttribute('name')
+    if (formLabel && isGibberish(formLabel)) formLabel = null
+    const label = formLabel || (fields.length > 0 ? `Form with: ${fields.slice(0, 3).join(', ')}` : 'Form')
 
     results.push({
       type: 'form',
@@ -140,12 +202,7 @@ function extractStandaloneInputs(doc: Document, results: InteractiveElement[]): 
     const inputType = input.getAttribute('type')?.toLowerCase() || 'text'
     if (['hidden', 'submit', 'button'].includes(inputType)) continue
 
-    const label =
-      input.getAttribute('aria-label') ||
-      input.getAttribute('placeholder') ||
-      input.getAttribute('name') ||
-      input.getAttribute('id') ||
-      inputType
+    const label = resolveLabel(input, doc, inputType, { checkPlaceholder: true, checkNameAndId: true })
 
     results.push({
       type: 'input',
@@ -172,11 +229,7 @@ function extractStandaloneSelects(doc: Document, results: InteractiveElement[]):
       if (text) optionLabels.push(text)
     }
 
-    const label =
-      select.getAttribute('aria-label') ||
-      select.getAttribute('name') ||
-      select.getAttribute('id') ||
-      'Select'
+    const label = resolveLabel(select, doc, 'Select', { checkNameAndId: true })
 
     results.push({
       type: 'select',
@@ -216,11 +269,7 @@ function extractLinks(doc: Document, url: string, results: InteractiveElement[])
       href = rawHref
     }
 
-    const label =
-      link.getAttribute('aria-label') ||
-      link.textContent?.trim() ||
-      link.getAttribute('title') ||
-      href
+    const label = resolveLabel(link, doc, href)
 
     // Skip empty-label links
     if (!label) continue
