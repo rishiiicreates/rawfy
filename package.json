@@ -51,7 +51,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/jsdom": "^28.0.3",
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^25.9.3",
     "@types/turndown": "^5.0.6",
     "eslint": "^10.5.0",
@@ -67,7 +67,7 @@
     "@mozilla/readability": "^0.6.0",
     "gpt-tokenizer": "^3.4.0",
     "hono": "^4.12.25",
-    "jsdom": "^29.1.1",
+    "jsdom": "^25.0.1",
     "pdfjs-dist": "^6.0.227",
     "playwright": "^1.60.0",
     "tesseract.js": "^7.0.0",
