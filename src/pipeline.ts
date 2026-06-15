@@ -202,8 +202,8 @@ export async function rawfyMetadata(
   })
 
   const readability = extractReadability(fetchResult.html, fetchResult.finalUrl)
-  const bodyText = readability.content
-    .replace(/<[^>]+>/g, ' ')
+  const dom = new JSDOM(readability.content)
+  const bodyText = (dom.window.document.body.textContent || '')
     .replace(/\s+/g, ' ')
     .trim()
 
