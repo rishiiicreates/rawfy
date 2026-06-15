@@ -6,7 +6,6 @@ Rawfy is **not** an AI agent. Rawfy is a tool that AI agents call.
 
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-green)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![npm](https://img.shields.io/npm/v/rawfy)](https://www.npmjs.com/package/rawfy)
 
 ---
 
