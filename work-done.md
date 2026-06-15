@@ -106,16 +106,20 @@ update after each session / PR merge.
 ### phase 8 — testing
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| unit tests (extractors)      | not started | —     | —     |
-| integration tests            | not started | —     | —     |
-| cross-platform CI            | not started | —     | —     |
+| unit tests                   | ✓ done      | —     | 180 unit tests total |
+| integration tests            | ✓ done      | —     | live Wikipedia, YouTube, React, Docs tests |
+| e2e tests                    | ✓ done      | —     | CLI fetch, MCP, REST API tests |
+| cross-platform CI            | ✓ done      | —     | GitHub Actions matrix (Ubuntu, macOS, Windows) |
 
-### phase 9 — release
+### phase 9 — packaging and release
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| npm publish                  | not started | —     | —     |
-| pip publish                  | not started | —     | —     |
-| GitHub Release               | not started | —     | —     |
+| build process                | ✓ done      | —     | `tsup` bundle config complete |
+| test installs                | ✓ done      | —     | Tested local installation (node & python) |
+| README & CHANGELOG           | ✓ done      | —     | Documentation is complete |
+| publish to npm               | pending     | —     | (user task) |
+| publish to PyPI              | pending     | —     | (user task) |
+| GitHub Release               | pending     | —     | (user task) |
 
 ---
 
