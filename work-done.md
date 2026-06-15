@@ -127,7 +127,7 @@ update after each session / PR merge.
 
 ### 2026-06-13 — planning session
 - created full project documentation suite
-- defined WebScout Markdown (WSM) output format
+- defined Rawfy Markdown (RFM) output format
 - researched and documented all competing tools
 - wrote Claude Code agent build prompt
 - established cross-platform strategy (Node.js primary, Python wrapper)
