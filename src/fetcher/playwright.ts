@@ -10,7 +10,12 @@
  * - Single browser context per fetch (no persistent state)
  */
 
-import type { FetchOptions, FetchResult, VideoCaptionTrack } from '../types.js'
+import type {
+  FetchOptions,
+  FetchResult,
+  VideoCaptionTrack,
+  YouTubePlayerConfig,
+} from '../types.js'
 import { createError, wrapError } from '../utils/errors.js'
 
 /** Default Playwright page timeout (ms) */
@@ -124,9 +129,14 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
     const videoCaptions = await extractVideoCaptions(page)
 
     // 1. Extract the YouTube config from the browser context
-    const playerConfig = await page.evaluate(() => {
-      return (window as any).ytInitialPlayerConfig || (window as any).ytInitialPlayerResponse || null
+    const rawPlayerConfig = await page.evaluate<unknown>(() => {
+      const globalWithYoutube = globalThis as typeof globalThis & {
+        ytInitialPlayerConfig?: unknown
+        ytInitialPlayerResponse?: unknown
+      }
+      return globalWithYoutube.ytInitialPlayerConfig || globalWithYoutube.ytInitialPlayerResponse || null
     })
+    const playerConfig = isYouTubePlayerConfig(rawPlayerConfig) ? rawPlayerConfig : undefined
 
     const durationMs = Math.round(performance.now() - startTime)
 
@@ -136,7 +146,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       headers,
       method: 'playwright',
       durationMs,
-      ...(playerConfig && { playerConfig }),
+      ...(playerConfig !== undefined && { playerConfig }),
       ...(videoCaptions.length > 0 && { videoCaptions }),
     }
   } catch (err: unknown) {
@@ -146,6 +156,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       if (rawfyErr.code === 'PLAYWRIGHT_FAILED' || rawfyErr.code === 'PLAYWRIGHT_NOT_INSTALLED') {
         throw err
       }
+
     }
 
     // Detect Playwright timeout
@@ -181,6 +192,10 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       })
     }
   }
+}
+
+function isYouTubePlayerConfig(value: unknown): value is YouTubePlayerConfig {
+  return value !== null && typeof value === 'object'
 }
 
 /**
