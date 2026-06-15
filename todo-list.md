@@ -186,28 +186,26 @@
 
 ## phase 6 — python wrapper
 
-- [ ] create `python/webscout/__init__.py`
-  - [ ] `fetch(url, format="markdown", vision=False, max_tokens=50000)` function
-  - [ ] detect Node.js and webscout CLI in PATH
-  - [ ] subprocess call to `webscout fetch <url> --format json`
-  - [ ] parse JSON, return dict
-  - [ ] raise WebScoutError on failure
+- [x] create `python/rawfy/__init__.py`
+  - [x] `fetch(url, format="markdown", vision=False, max_tokens=50000)` function
+  - [x] detect Node.js and rawfy CLI in PATH
+  - [x] subprocess call to `rawfy fetch <url> --format json`
+  - [x] parse JSON, return dict
+  - [x] raise RawfyError on failure
 
-- [ ] create `python/setup.py` / `pyproject.toml`
-  - [ ] package name: `webscout-skill`
-  - [ ] post-install: check for Node.js, warn if not found
-  - [ ] entry point: `webscout` (same CLI)
+- [x] create `python/pyproject.toml`
+  - [x] package name: `rawfy`
+  - [x] entry point: `rawfy-py` (same CLI)
 
 ---
 
 ## phase 7 — agent integration guides
 
-- [ ] write `docs/claude-code.md` — how to add as MCP server
-- [ ] write `docs/openclaw.md` — how to use as subprocess tool
-- [ ] write `docs/antigravity.md` — how to use with --mcp flag
-- [ ] write `docs/langchain.md` — Python module usage in LangChain agent
-- [ ] write `docs/ollama.md` — REST API usage with Ollama tool-call agents
-- [ ] write `docs/shiro.md` — integrating into Shiro's tool registry
+- [x] write `docs/claude-code.md` — how to add as MCP server
+- [x] write `docs/subprocess.md` — how to use as subprocess tool
+- [x] write `docs/antigravity.md` — how to use with --mcp flag
+- [x] write `docs/langchain.md` — Python module usage in LangChain agent
+- [x] write `docs/ollama.md` — REST API usage with Ollama tool-call agents
 
 ---
 

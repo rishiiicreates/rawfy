@@ -90,16 +90,17 @@ update after each session / PR merge.
 ### phase 6 — python wrapper
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| Python module                | not started | —     | —     |
-| pyproject.toml               | not started | —     | —     |
+| Python module                | ✓ done      | —     | `rawfy.client`, subprocess integration |
+| pyproject.toml               | ✓ done      | —     | setuptools config, `rawfy-py` entry point |
 
 ### phase 7 — docs
 | task                          | status      | PR    | notes |
 |------------------------------|-------------|-------|-------|
-| README.md                    | not started | —     | —     |
-| docs/claude-code.md          | not started | —     | —     |
-| docs/openclaw.md             | not started | —     | —     |
-| docs/antigravity.md          | not started | —     | —     |
+| Claude Code MCP              | ✓ done      | —     | `docs/claude-code.md` |
+| Subprocess API               | ✓ done      | —     | `docs/subprocess.md` |
+| AntiGravity MCP              | ✓ done      | —     | `docs/antigravity.md` |
+| LangChain/LangGraph          | ✓ done      | —     | `docs/langchain.md` |
+| Ollama REST API              | ✓ done      | —     | `docs/ollama.md` |
 | docs/shiro.md                | not started | —     | —     |
 
 ### phase 8 — testing
