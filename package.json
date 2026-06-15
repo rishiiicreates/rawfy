@@ -1,0 +1,75 @@
+{
+  "name": "rawfy",
+  "version": "0.1.0",
+  "description": "Universal web perception skill for AI agents — converts any URL into structured, agent-readable content",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "rawfy": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write 'src/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts'",
+    "start:mcp": "node dist/server-mcp.js",
+    "start:api": "node dist/server-api.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "mcp",
+    "web",
+    "scraper",
+    "skill",
+    "cli",
+    "markdown",
+    "rawfy"
+  ],
+  "license": "MIT",
+  "author": "rishiiicreates",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rishiiicreates/rawfy.git"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "^25.9.3",
+    "@types/turndown": "^5.0.6",
+    "eslint": "^10.5.0",
+    "prettier": "^3.8.4",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.0",
+    "vitest": "^4.1.8"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@mozilla/readability": "^0.6.0",
+    "hono": "^4.12.25",
+    "jsdom": "^29.1.1",
+    "pdfjs-dist": "^6.0.227",
+    "playwright": "^1.60.0",
+    "tesseract.js": "^7.0.0",
+    "turndown": "^7.2.4"
+  }
+}

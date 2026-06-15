@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+*.tgz
+coverage/
+
+# Playwright
+chromium/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
