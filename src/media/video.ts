@@ -27,6 +27,7 @@ export async function extractVideos(
   html: string,
   url: string,
   captionTracks: VideoCaptionTrack[] = [],
+  playerConfig?: any,
 ): Promise<VideoResult[]> {
   const dom = new JSDOM(html, { url })
   const doc = dom.window.document
@@ -40,7 +41,7 @@ export async function extractVideos(
     const src = iframe.getAttribute('src') || iframe.getAttribute('data-src') || ''
     const videoId = extractYouTubeId(src)
     if (videoId) {
-      const video = await buildYouTubeResult(videoId)
+      const video = await buildYouTubeResult(videoId, playerConfig)
       results.push(video)
     }
   }
@@ -48,7 +49,7 @@ export async function extractVideos(
   // Check if the page URL itself is a YouTube video
   const pageVideoId = extractYouTubeId(url)
   if (pageVideoId && !results.some((r) => r.src?.includes(pageVideoId))) {
-    const video = await buildYouTubeResult(pageVideoId)
+    const video = await buildYouTubeResult(pageVideoId, playerConfig)
     results.push(video)
   }
 
@@ -146,7 +147,7 @@ function extractYouTubeId(url: string): string | null {
  * Build a VideoResult for a YouTube video.
  * Attempts to fetch the auto-generated transcript.
  */
-async function buildYouTubeResult(videoId: string): Promise<VideoResult> {
+async function buildYouTubeResult(videoId: string, playerConfig?: any): Promise<VideoResult> {
   const result: VideoResult = {
     type: 'video',
     src: `https://www.youtube.com/watch?v=${videoId}`,
@@ -169,7 +170,13 @@ async function buildYouTubeResult(videoId: string): Promise<VideoResult> {
 
   // Try to fetch auto-generated captions
   try {
-    const transcript = await fetchYouTubeTranscript(videoId)
+    let transcript: string | null = null
+    if (playerConfig) {
+      transcript = await extractTranscriptFromConfig(playerConfig)
+    }
+    if (!transcript) {
+      transcript = await fetchYouTubeTranscript(videoId)
+    }
     if (transcript) result.transcript = transcript
   } catch {
     // Transcript fetch failed — not critical
@@ -192,6 +199,50 @@ async function fetchYouTubeTranscript(videoId: string): Promise<string | null> {
     const text = transcript
       .map((t) => t.text.replace(/\n/g, ' ').trim())
       .filter((t) => t.length > 0)
+      .join(' ')
+
+    return text.length > 10 ? text : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Extract YouTube transcript directly from the player config object.
+ */
+async function extractTranscriptFromConfig(playerConfig: any): Promise<string | null> {
+  try {
+    const captionTracks = playerConfig?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+    if (!captionTracks || captionTracks.length === 0) return null
+
+    // Find the English track or just use the first one
+    const track = captionTracks.find((t: any) => t.languageCode === 'en') || captionTracks[0]
+    if (!track?.baseUrl) return null
+
+    const captionResponse = await fetch(track.baseUrl, {
+      signal: AbortSignal.timeout(5000),
+    })
+
+    if (!captionResponse.ok) return null
+    const captionXml = await captionResponse.text()
+
+    // Parse caption XML and extract text
+    const textSegments = captionXml.match(/<text[^>]*>(.*?)<\/text>/gs)
+    if (!textSegments || textSegments.length === 0) return null
+
+    const text = textSegments
+      .map((segment) => {
+        return segment
+          .replace(/<[^>]+>/g, '')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\n/g, ' ')
+          .trim()
+      })
+      .filter((s) => s.length > 0)
       .join(' ')
 
     return text.length > 10 ? text : null

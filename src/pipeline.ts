@@ -115,6 +115,7 @@ export async function rawfyFetch(
       fetchResult.html,
       fetchResult.finalUrl,
       fetchResult.videoCaptions,
+      fetchResult.playerConfig,
     )
     media.push(...videos)
   } catch {

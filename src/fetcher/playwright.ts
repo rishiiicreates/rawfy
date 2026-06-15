@@ -123,6 +123,11 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
     // Extract native video captions via the TextTrack API
     const videoCaptions = await extractVideoCaptions(page)
 
+    // 1. Extract the YouTube config from the browser context
+    const playerConfig = await page.evaluate(() => {
+      return (window as any).ytInitialPlayerConfig || (window as any).ytInitialPlayerResponse || null
+    })
+
     const durationMs = Math.round(performance.now() - startTime)
 
     return {
@@ -131,6 +136,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       headers,
       method: 'playwright',
       durationMs,
+      ...(playerConfig && { playerConfig }),
       ...(videoCaptions.length > 0 && { videoCaptions }),
     }
   } catch (err: unknown) {

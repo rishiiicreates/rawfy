@@ -62,6 +62,8 @@ export interface FetchResult {
   method: FetchMethod
   /** Fetch duration in milliseconds */
   durationMs: number
+  /** Extracted player config (e.g., ytInitialPlayerConfig for YouTube) */
+  playerConfig?: any
   /** Native video captions extracted from Playwright (if available) */
   videoCaptions?: VideoCaptionTrack[]
 }
