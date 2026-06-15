@@ -30,6 +30,7 @@ import { estimateTokens, truncate } from './utils/truncate.js'
 import { serializeWsm } from './output/wsm.js'
 import { serializeJson } from './output/json.js'
 import { serializeText } from './output/text.js'
+import { JSDOM } from 'jsdom'
 
 /** Default maximum output tokens */
 const DEFAULT_MAX_TOKENS = 50_000
@@ -72,8 +73,8 @@ export async function rawfyFetch(
   )
 
   // Get plain text for word count (strip HTML tags from readability content)
-  const bodyText = readability.content
-    .replace(/<[^>]+>/g, ' ')
+  const dom = new JSDOM(readability.content)
+  const bodyText = (dom.window.document.body.textContent || '')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -90,14 +91,7 @@ export async function rawfyFetch(
   // -----------------------------------------------------------------------
   log('converting to markdown...')
   const markdown = htmlToMarkdown(readability.content, fetchResult.finalUrl)
-  const plainText = markdown
-    .replace(/\[IMAGE:.*?\]/g, '')
-    .replace(/\[VIDEO.*?\]/g, '')
-    .replace(/\[AUDIO.*?\]/g, '')
-    .replace(/\[PDF.*?\]/g, '')
-    .replace(/[#*`_~[\]]/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  const plainText = bodyText
 
   // -----------------------------------------------------------------------
   // Stage 4: Media extraction
@@ -105,24 +99,40 @@ export async function rawfyFetch(
   log('extracting media...')
   const media: MediaResult[] = []
 
-  const images = await extractImages(fetchResult.html, fetchResult.finalUrl, {
-    vision: options.vision,
-    anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
-  })
-  media.push(...images)
+  try {
+    const images = await extractImages(fetchResult.html, fetchResult.finalUrl, {
+      vision: options.vision,
+      anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
+    })
+    media.push(...images)
+  } catch (e) {
+    // Ignore image extraction failure
+  }
 
-  const videos = await extractVideos(
-    fetchResult.html,
-    fetchResult.finalUrl,
-    fetchResult.videoCaptions,
-  )
-  media.push(...videos)
+  try {
+    const videos = await extractVideos(
+      fetchResult.html,
+      fetchResult.finalUrl,
+      fetchResult.videoCaptions,
+    )
+    media.push(...videos)
+  } catch (e) {
+    // Ignore video extraction failure
+  }
 
-  const audio = extractAudio(fetchResult.html, fetchResult.finalUrl)
-  media.push(...audio)
+  try {
+    const audio = extractAudio(fetchResult.html, fetchResult.finalUrl)
+    media.push(...audio)
+  } catch (e) {
+    // Ignore audio extraction failure
+  }
 
-  const pdfs = await extractPdfs(fetchResult.html, fetchResult.finalUrl)
-  media.push(...pdfs)
+  try {
+    const pdfs = await extractPdfs(fetchResult.html, fetchResult.finalUrl)
+    media.push(...pdfs)
+  } catch (e) {
+    // Ignore pdf extraction failure
+  }
 
   // -----------------------------------------------------------------------
   // Stage 5: Build PageData

@@ -209,6 +209,14 @@ async function runOcr(imageUrl: string): Promise<string | null> {
  */
 async function runVision(imageUrl: string, apiKey: string): Promise<string | null> {
   try {
+    const imgRes = await fetch(imageUrl)
+    if (!imgRes.ok) return null
+    const buffer = await imgRes.arrayBuffer()
+    const base64Data = Buffer.from(buffer).toString('base64')
+    
+    let mediaType = imgRes.headers.get('content-type') || 'image/jpeg'
+    if (!mediaType.startsWith('image/')) mediaType = 'image/jpeg'
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -217,7 +225,7 @@ async function runVision(imageUrl: string, apiKey: string): Promise<string | nul
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-3-haiku-20240307',
         max_tokens: 200,
         messages: [
           {
@@ -225,7 +233,7 @@ async function runVision(imageUrl: string, apiKey: string): Promise<string | nul
             content: [
               {
                 type: 'image',
-                source: { type: 'url', url: imageUrl },
+                source: { type: 'base64', media_type: mediaType, data: base64Data },
               },
               {
                 type: 'text',

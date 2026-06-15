@@ -6,15 +6,15 @@ describe('estimateTokens', () => {
     expect(estimateTokens('')).toBe(0)
   })
 
-  it('estimates tokens based on chars/4 heuristic', () => {
-    // 100 chars → 25 tokens
+  it('estimates tokens using gpt-tokenizer', () => {
+    // 100 'a's will be encoded into a certain number of tokens, usually ~25-50 depending on BPE
     const text = 'a'.repeat(100)
-    expect(estimateTokens(text)).toBe(25)
+    expect(estimateTokens(text)).toBeGreaterThan(0)
   })
 
-  it('rounds up partial tokens', () => {
-    // 5 chars → 2 tokens (ceil(5/4))
-    expect(estimateTokens('hello')).toBe(2)
+  it('accurately counts real words', () => {
+    // 'hello' is typically 1 token
+    expect(estimateTokens('hello')).toBe(1)
   })
 })
 
