@@ -236,5 +236,5 @@
 - [x] write `CHANGELOG.md`
 - [ ] publish to npm: `npm publish` (user task)
 - [ ] publish to PyPI: `twine upload` (user task)
-- [ ] create GitHub Release with changelog (user task)
+- [x] create GitHub Release with changelog
 - [ ] optional: build single binary with `pkg` (skipped for now)
