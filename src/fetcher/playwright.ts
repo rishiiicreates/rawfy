@@ -195,7 +195,26 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
 }
 
 function isYouTubePlayerConfig(value: unknown): value is YouTubePlayerConfig {
-  return value !== null && typeof value === 'object'
+  if (value === null || typeof value !== 'object') return false
+
+  const config = value as {
+    captions?: {
+      playerCaptionsTracklistRenderer?: {
+        captionTracks?: Array<{ languageCode?: unknown; baseUrl?: unknown }>
+      }
+    }
+  }
+
+  const tracks = config.captions?.playerCaptionsTracklistRenderer?.captionTracks
+  if (tracks === undefined) return true
+  if (!Array.isArray(tracks)) return false
+
+  return tracks.every((track) => {
+    if (track === null || typeof track !== 'object') return false
+    if (track.languageCode !== undefined && typeof track.languageCode !== 'string') return false
+    if (track.baseUrl !== undefined && typeof track.baseUrl !== 'string') return false
+    return true
+  })
 }
 
 /**
