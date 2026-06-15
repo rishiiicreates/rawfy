@@ -125,8 +125,8 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
 
     // 1. Extract the YouTube config from the browser context
     const playerConfig = await page.evaluate(() => {
-      return (window as any).ytInitialPlayerConfig || (window as any).ytInitialPlayerResponse || null
-    })
+      return (window as any).ytInitialPlayerConfig || {};
+    });
 
     const durationMs = Math.round(performance.now() - startTime)
 
@@ -136,7 +136,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       headers,
       method: 'playwright',
       durationMs,
-      ...(playerConfig && { playerConfig }),
+      playerConfig, // Pass this to the media extractor
       ...(videoCaptions.length > 0 && { videoCaptions }),
     }
   } catch (err: unknown) {
