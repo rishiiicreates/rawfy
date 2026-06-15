@@ -10,7 +10,12 @@
  * - Single browser context per fetch (no persistent state)
  */
 
-import type { FetchOptions, FetchResult, VideoCaptionTrack } from '../types.js'
+import type {
+  FetchOptions,
+  FetchResult,
+  VideoCaptionTrack,
+  YouTubePlayerConfig,
+} from '../types.js'
 import { createError, wrapError } from '../utils/errors.js'
 
 /** Default Playwright page timeout (ms) */
@@ -124,6 +129,14 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
     const videoCaptions = await extractVideoCaptions(page)
 
     // 1. Extract the YouTube config from the browser context
+    const rawPlayerConfig = await page.evaluate<unknown>(() => {
+      const globalWithYoutube = globalThis as typeof globalThis & {
+        ytInitialPlayerConfig?: unknown
+        ytInitialPlayerResponse?: unknown
+      }
+      return globalWithYoutube.ytInitialPlayerConfig || globalWithYoutube.ytInitialPlayerResponse || null
+    })
+    const playerConfig = isYouTubePlayerConfig(rawPlayerConfig) ? rawPlayerConfig : undefined
     const playerConfig = await page.evaluate(() => {
       return (window as any).ytInitialPlayerConfig || {};
     });
@@ -136,6 +149,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       headers,
       method: 'playwright',
       durationMs,
+      ...(playerConfig !== undefined && { playerConfig }),
       playerConfig, // Pass this to the media extractor
       ...(videoCaptions.length > 0 && { videoCaptions }),
     }
@@ -146,6 +160,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       if (rawfyErr.code === 'PLAYWRIGHT_FAILED' || rawfyErr.code === 'PLAYWRIGHT_NOT_INSTALLED') {
         throw err
       }
+
     }
 
     // Detect Playwright timeout
@@ -181,6 +196,29 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       })
     }
   }
+}
+
+function isYouTubePlayerConfig(value: unknown): value is YouTubePlayerConfig {
+  if (value === null || typeof value !== 'object') return false
+
+  const config = value as {
+    captions?: {
+      playerCaptionsTracklistRenderer?: {
+        captionTracks?: Array<{ languageCode?: unknown; baseUrl?: unknown }>
+      }
+    }
+  }
+
+  const tracks = config.captions?.playerCaptionsTracklistRenderer?.captionTracks
+  if (tracks === undefined) return true
+  if (!Array.isArray(tracks)) return false
+
+  return tracks.every((track) => {
+    if (track === null || typeof track !== 'object') return false
+    if (track.languageCode !== undefined && typeof track.languageCode !== 'string') return false
+    if (track.baseUrl !== undefined && typeof track.baseUrl !== 'string') return false
+    return true
+  })
 }
 
 /**

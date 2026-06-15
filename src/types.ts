@@ -63,7 +63,7 @@ export interface FetchResult {
   /** Fetch duration in milliseconds */
   durationMs: number
   /** Extracted player config (e.g., ytInitialPlayerConfig for YouTube) */
-  playerConfig?: any
+  playerConfig?: YouTubePlayerConfig
   /** Native video captions extracted from Playwright (if available) */
   videoCaptions?: VideoCaptionTrack[]
 }
@@ -76,6 +76,21 @@ export interface VideoCaptionTrack {
   text: string
   /** Track label (e.g. 'English (auto-generated)') */
   label?: string
+}
+
+/** YouTube caption track entry from player config */
+export interface YouTubeCaptionTrack {
+  languageCode?: string
+  baseUrl?: string
+}
+
+/** YouTube player config shape used for transcript extraction */
+export interface YouTubePlayerConfig {
+  captions?: {
+    playerCaptionsTracklistRenderer?: {
+      captionTracks?: YouTubeCaptionTrack[]
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
