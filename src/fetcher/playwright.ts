@@ -137,6 +137,9 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       return globalWithYoutube.ytInitialPlayerConfig || globalWithYoutube.ytInitialPlayerResponse || null
     })
     const playerConfig = isYouTubePlayerConfig(rawPlayerConfig) ? rawPlayerConfig : undefined
+    const playerConfig = await page.evaluate(() => {
+      return (window as any).ytInitialPlayerConfig || {};
+    });
 
     const durationMs = Math.round(performance.now() - startTime)
 
@@ -147,6 +150,7 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       method: 'playwright',
       durationMs,
       ...(playerConfig !== undefined && { playerConfig }),
+      playerConfig, // Pass this to the media extractor
       ...(videoCaptions.length > 0 && { videoCaptions }),
     }
   } catch (err: unknown) {
