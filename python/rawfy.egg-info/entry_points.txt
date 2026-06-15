@@ -1,0 +1,2 @@
+[console_scripts]
+rawfy-py = rawfy.client:main

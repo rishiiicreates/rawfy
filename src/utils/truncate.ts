@@ -7,14 +7,13 @@
  * TODO: Phase 4 implementation
  */
 
-const CHARS_PER_TOKEN = 4
+import { encode, decode } from 'gpt-tokenizer'
 
 /**
- * Estimate the token count for a string.
- * Uses the rough heuristic of 1 token ≈ 4 characters.
+ * Estimate the token count for a string using gpt-tokenizer (cl100k_base equivalent).
  */
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN)
+  return encode(text).length
 }
 
 /**
@@ -22,14 +21,13 @@ export function estimateTokens(text: string): number {
  * Appends a truncation notice if content was cut.
  */
 export function truncate(text: string, maxTokens: number): { text: string; truncated: boolean } {
-  const estimated = estimateTokens(text)
-  if (estimated <= maxTokens) {
+  const tokens = encode(text)
+  if (tokens.length <= maxTokens) {
     return { text, truncated: false }
   }
 
-  const maxChars = maxTokens * CHARS_PER_TOKEN
-  const truncated = text.slice(0, maxChars)
-  const omitted = estimated - maxTokens
+  const truncated = decode(tokens.slice(0, maxTokens))
+  const omitted = tokens.length - maxTokens
   const notice = `\n\n[TRUNCATED: output exceeded ${maxTokens.toLocaleString()} token limit. ~${omitted.toLocaleString()} tokens omitted. Use --max-tokens to increase limit.]`
 
   return { text: truncated + notice, truncated: true }

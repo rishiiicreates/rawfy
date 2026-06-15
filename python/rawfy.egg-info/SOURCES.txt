@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+rawfy/__init__.py
+rawfy/__main__.py
+rawfy/client.py
+rawfy.egg-info/PKG-INFO
+rawfy.egg-info/SOURCES.txt
+rawfy.egg-info/dependency_links.txt
+rawfy.egg-info/entry_points.txt
+rawfy.egg-info/top_level.txt
