@@ -49,12 +49,15 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
   // Using dynamic import means the module loads fast when Playwright isn't needed.
   let chromium: typeof import('playwright').chromium
   try {
-    const pw = await import('playwright')
-    chromium = pw.chromium
+    const pwExtra = await import('playwright-extra')
+    const stealth = await import('puppeteer-extra-plugin-stealth')
+    const pwExtraChromium = pwExtra.chromium
+    pwExtraChromium.use(stealth.default())
+    chromium = pwExtraChromium as unknown as typeof import('playwright').chromium
   } catch {
     throw createError(
       'PLAYWRIGHT_NOT_INSTALLED',
-      'Playwright is not installed. Run: rawfy install',
+      'Playwright and stealth plugins are not installed. Run: npm install playwright-extra puppeteer-extra-plugin-stealth',
       url,
     )
   }

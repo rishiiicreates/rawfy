@@ -63,7 +63,21 @@ export async function fetchPage(url: string, options?: FetchPageOptions): Promis
     throw createError('INVALID_URL', `Invalid URL: ${url}`, url)
   }
 
-  // Step 1: Static fetch
+  // Step 1: Check if forcePlaywright is enabled
+  if (options?.forcePlaywright) {
+    progress(`forcing Playwright fetch for ${url}...`)
+    try {
+      return await fetchPlaywright(url, options)
+    } catch (err: unknown) {
+      if (isRawfyError(err) && err.code === 'PLAYWRIGHT_NOT_INSTALLED') {
+        progress('⚠ Playwright not installed. Falling back to static fetch.')
+      } else {
+        progress('⚠ Playwright fetch failed. Falling back to static fetch.')
+      }
+    }
+  }
+
+  // Step 2: Static fetch
   progress(`fetching ${url}...`)
   let staticResult: FetchResult
 

@@ -39,6 +39,8 @@ export interface RawfyError {
 export interface FetchOptions {
   /** Force static-only fetch (skip Playwright) */
   noPlaywright?: boolean
+  /** Force Playwright fetch (skip static heuristics) */
+  forcePlaywright?: boolean
   /** Fetch timeout in milliseconds */
   timeoutMs?: number
   /** User-Agent header override */
@@ -222,6 +224,8 @@ export interface RawfyOptions {
   vision?: boolean
   /** Skip Playwright JS rendering */
   noPlaywright?: boolean
+  /** Force Playwright JS rendering */
+  forcePlaywright?: boolean
   /** Maximum output tokens (truncate beyond this) */
   maxTokens?: number
   /** Write output to file path instead of returning */

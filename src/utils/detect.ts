@@ -63,6 +63,12 @@ const FRAMEWORK_SIGNATURES: FrameworkSignature[] = [
 
   // Astro — astro-island custom elements (for interactive islands)
   { name: 'Astro', pattern: /astro-island/i },
+
+  // YouTube — uses a custom polymer-based framework and highly dynamic initial data
+  { name: 'YouTube', pattern: /ytInitialPlayerResponse/i },
+
+  // Webpack — common footprint for heavily bundled JS applications
+  { name: 'Webpack', pattern: /window\.webpackJsonp/i },
 ]
 
 // ---------------------------------------------------------------------------
@@ -70,7 +76,7 @@ const FRAMEWORK_SIGNATURES: FrameworkSignature[] = [
 // ---------------------------------------------------------------------------
 
 /** Minimum body text length to consider a page "rendered" */
-const MIN_BODY_TEXT_LENGTH = 500
+const MIN_BODY_TEXT_LENGTH = 200
 
 /**
  * Strip HTML tags and extract approximate text content.
