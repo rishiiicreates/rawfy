@@ -49,7 +49,7 @@ AI Agents struggle to read the web.
 ### Node.js (Primary CLI & Server)
 ```bash
 # Install globally
-npm install -g @rishiicreates/rawfy
+npm install -g rawfy
 
 # Install Playwright browsers (Required for rendering SPAs)
 rawfy install
@@ -119,7 +119,7 @@ curl "http://localhost:3847/fetch?url=https://example.com&format=json"
 ### 4. Node.js / TypeScript Library
 
 ```typescript
-import { rawfyFetch, rawfyMetadata } from '@rishiicreates/rawfy'
+import { rawfyFetch, rawfyMetadata } from 'rawfy'
 
 // Fetch full page as JSON
 const jsonOutput = await rawfyFetch('https://example.com', { 

@@ -5,7 +5,7 @@ Python bindings for the [Rawfy](https://github.com/rishiiicreates/rawfy) AI agen
 ## Prerequisites
 
 - **Node.js >= 18** — Rawfy is a Node.js tool
-- **Rawfy CLI** — `npm install -g @rishiicreates/rawfy`
+- **Rawfy CLI** — `npm install -g rawfy`
 
 ## Install
 

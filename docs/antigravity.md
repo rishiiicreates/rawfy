@@ -6,7 +6,7 @@ MCP server or REST API.
 ## Setup
 
 ```bash
-npm install -g @rishiicreates/rawfy
+npm install -g rawfy
 rawfy install  # optional: install Playwright for JS pages
 ```
 

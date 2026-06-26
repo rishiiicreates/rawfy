@@ -8,7 +8,7 @@ to fetch and understand any web page.
 ### 1. Install Rawfy
 
 ```bash
-npm install -g @rishiicreates/rawfy
+npm install -g rawfy
 ```
 
 ### 2. Add to Claude Code MCP config
@@ -74,7 +74,7 @@ Once Rawfy is connected, you can ask Claude:
 ## Troubleshooting
 
 **"rawfy: command not found"**
-Make sure rawfy is installed globally: `npm install -g @rishiicreates/rawfy`
+Make sure rawfy is installed globally: `npm install -g rawfy`
 
 **"Playwright not installed"**
 Run `rawfy install` to install Chromium for JS-rendered pages.
