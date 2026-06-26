@@ -16,9 +16,15 @@ import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
 import { serializeWsm } from './output/wsm.js'
 import { serializeText } from './output/text.js'
+import * as fs from 'fs'
+import { fileURLToPath } from 'url'
+import * as path from 'path'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkgPath = path.resolve(__dirname, '../package.json')
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
 const SERVER_NAME = 'rawfy'
-const SERVER_VERSION = '0.1.1'
+const SERVER_VERSION = pkg.version
 
 /**
  * Start the MCP server with stdio transport.

@@ -17,7 +17,13 @@ import type { OutputFormat } from './types.js'
 import { serializeText } from './output/text.js'
 import { serializeWsm } from './output/wsm.js'
 
-const VERSION = '0.1.1'
+import { fileURLToPath } from 'url'
+import * as path from 'path'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkgPath = path.resolve(__dirname, '../package.json')
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+const VERSION = pkg.version
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
@@ -51,8 +57,10 @@ async function main(): Promise<void> {
       const hasUrl = args.some(a => a.startsWith('http://') || a.startsWith('https://'))
       if (hasUrl) {
         await handleFetch(args)
+      } else if (command.startsWith('http')) {
+        await handleFetch(args) // let handleFetch deal with it
       } else {
-        console.error(`\x1b[31mrawfy: unknown command '${command}'\x1b[0m`)
+        console.error(`\x1b[31mrawfy error: invalid URL format '${command}'. Ensure it starts with http:// or https://\x1b[0m`)
         console.error("Run 'rawfy --help' for usage.")
         process.exit(1)
       }
@@ -92,6 +100,21 @@ async function handleFetch(args: string[]): Promise<void> {
   const forcePlaywright = flags['force-playwright'] !== undefined
   const maxTokens = flags['max-tokens'] ? parseInt(flags['max-tokens'], 10) : undefined
   const timeoutMs = flags['timeout'] ? parseInt(flags['timeout'], 10) : undefined
+  const maxDepth = flags['max-depth'] ? parseInt(flags['max-depth'], 10) : 0
+  
+  if (timeoutMs !== undefined && (isNaN(timeoutMs) || timeoutMs <= 0)) {
+    console.error(`rawfy: invalid timeout value '${flags['timeout']}'`)
+    process.exit(1)
+  }
+  if (maxTokens !== undefined && (isNaN(maxTokens) || maxTokens <= 0)) {
+    console.error(`rawfy: invalid max-tokens value '${flags['max-tokens']}'`)
+    process.exit(1)
+  }
+  if (maxDepth < 0 || isNaN(maxDepth)) {
+    console.error(`rawfy: invalid max-depth value '${flags['max-depth']}'`)
+    process.exit(1)
+  }
+
   const linksOnly = flags['links-only'] !== undefined
   const outFile = flags['out'] || flags['o']
 
@@ -102,28 +125,59 @@ async function handleFetch(args: string[]): Promise<void> {
     : undefined
 
   try {
-    const output = await rawfyFetch(
-      url,
-      { format, vision, noPlaywright, forcePlaywright, maxTokens, timeoutMs, linksOnly },
-      progress,
-    )
+    const visited = new Set<string>()
+    const results: any[] = []
+    const queue = [{ url, depth: 0 }]
 
-    if (isTTY) process.stderr.write('\r  ✅ done\n')
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      if (visited.has(current.url)) continue
+      visited.add(current.url)
+      
+      if (progress) progress(`Fetching [${current.depth}/${maxDepth}] ${current.url.slice(0, 50)}...`)
+      
+      try {
+        const output = await rawfyFetch(
+          current.url,
+          { format, vision, noPlaywright, forcePlaywright, maxTokens, timeoutMs, linksOnly },
+          undefined
+        )
+        results.push(output)
+
+        if (current.depth < maxDepth) {
+          const baseUrl = new URL(current.url)
+          for (const el of output.interactiveElements) {
+            if (el.type === 'link' && el.href) {
+              try {
+                const nextUrl = new URL(el.href, baseUrl.href).href
+                if (!visited.has(nextUrl) && nextUrl.startsWith('http')) {
+                  queue.push({ url: nextUrl, depth: current.depth + 1 })
+                }
+              } catch {}
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`\nrawfy: warning: failed to fetch ${current.url}`)
+      }
+    }
+
+    if (isTTY) process.stderr.write('\r  ✅ done                                        \n')
     
     let finalString = ''
     switch (format) {
       case 'json':
-        finalString = JSON.stringify(output, null, 2)
+        finalString = JSON.stringify(maxDepth > 0 ? results : results[0], null, 2)
         break
       case 'html':
-        finalString = output.content.html
+        finalString = results.map(r => r.content.html).join('\n<hr/>\n')
         break
       case 'text':
-        finalString = serializeText(output)
+        finalString = results.map(r => serializeText(r)).join('\n\n---\n\n')
         break
       case 'markdown':
       default:
-        finalString = serializeWsm(output)
+        finalString = results.map(r => serializeWsm(r)).join('\n\n---\n\n')
         break
     }
 
@@ -205,6 +259,7 @@ function printUsage(): void {
     --vision          Enable vision API for image descriptions
     --no-playwright   Skip Playwright, use static fetch only
     --max-tokens <n>  Maximum output tokens (default: 50000)
+    --max-depth <n>   Crawl domain recursively to depth n
     --out <file>      Write output to file instead of stdout
 
   Shorthand:

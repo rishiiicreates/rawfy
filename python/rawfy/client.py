@@ -1,8 +1,13 @@
 import json
-import shutil
-import subprocess
 import sys
-from typing import Any, Literal
+import time
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
+from pydantic import BaseModel
+import httpx
+from bs4 import BeautifulSoup
+from readability import Document
+import markdownify
 
 class RawfyError(Exception):
     def __init__(self, message: str, code: str | None = None, url: str | None = None):
@@ -12,14 +17,47 @@ class RawfyError(Exception):
     def __repr__(self) -> str:
         return f"RawfyError({self.args[0]!r}, code={self.code!r}, url={self.url!r})"
 
-OutputFormat = Literal["markdown", "json", "text", "html"]
+class OpenGraphData(BaseModel):
+    title: Optional[str] = None
+    type: Optional[str] = None
+    description: Optional[str] = None
+    image: Optional[str] = None
+    url: Optional[str] = None
+    siteName: Optional[str] = None
 
-def _get_rawfy_cmd() -> list[str]:
-    if shutil.which("rawfy"):
-        return ["rawfy"]
-    if shutil.which("npx"):
-        return ["npx", "-y", "@rishiicreates/rawfy"]
-    raise RawfyError("rawfy CLI not found. Please install Node.js and run 'npm install -g @rishiicreates/rawfy'", code="CLI_NOT_FOUND")
+class PageMetadata(BaseModel):
+    url: str
+    canonicalUrl: Optional[str] = None
+    type: str
+    fetchedAt: str
+    lang: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    wordCount: int
+    readingTimeMinutes: int
+    interactiveElementCount: int
+    og: Optional[OpenGraphData] = None
+    jsonLd: Optional[list[Any]] = None
+
+class PageContent(BaseModel):
+    markdown: str
+    text: str
+    html: str
+
+class FetchStats(BaseModel):
+    method: str
+    durationMs: int
+    estimatedTokens: int
+    truncated: bool
+
+class PageData(BaseModel):
+    metadata: PageMetadata
+    content: PageContent
+    media: list[dict[str, Any]]
+    interactiveElements: list[dict[str, Any]]
+    fetchStats: FetchStats
+
+OutputFormat = Literal["markdown", "json", "text", "html"]
 
 def fetch(
     url: str,
@@ -29,44 +67,107 @@ def fetch(
     no_playwright: bool = False,
     max_tokens: int = 50_000,
     timeout: int = 30,
-) -> str:
-    cmd = _get_rawfy_cmd()
-    cmd.extend(["fetch", url, "--format", format, "--max-tokens", str(max_tokens), "--timeout", str(timeout * 1000)])
+) -> PageData:
+    start_time = time.time()
     
-    if vision:
-        cmd.append("--vision")
-    if no_playwright:
-        cmd.append("--no-playwright")
-        
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if result.returncode != 0:
-            err_msg = result.stderr.strip()
-            raise RawfyError(f"Rawfy CLI failed: {err_msg}", code="CLI_ERROR", url=url)
-        return result.stdout.strip()
+        resp = httpx.get(
+            url,
+            timeout=timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Rawfy/0.1.1 (Native Python Client)"}
+        )
+        resp.raise_for_status()
+    except httpx.TimeoutException:
+        raise RawfyError("Fetch timed out", code="FETCH_TIMEOUT", url=url)
     except Exception as e:
-        if isinstance(e, RawfyError):
-            raise
-        raise RawfyError(str(e), code="SUBPROCESS_ERROR", url=url)
+        raise RawfyError(f"Fetch failed: {str(e)}", code="FETCH_FAILED", url=url)
+        
+    html = resp.text
+    final_url = str(resp.url)
+    
+    # Use readability-lxml to extract content
+    doc = Document(html)
+    summary_html = doc.summary()
+    title = doc.title()
+    
+    # Beautiful Soup for additional metadata
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    canonical_tag = soup.find('link', rel='canonical')
+    canonical_url = canonical_tag['href'] if canonical_tag and canonical_tag.has_attr('href') else None
+    
+    lang_tag = soup.find('html')
+    lang = lang_tag.get('lang') if lang_tag else None
+    
+    desc_tag = soup.find('meta', attrs={'name': 'description'})
+    description = desc_tag['content'] if desc_tag and desc_tag.has_attr('content') else None
+    
+    og = OpenGraphData()
+    og_title = soup.find('meta', property='og:title')
+    if og_title: og.title = og_title.get('content')
+    og_desc = soup.find('meta', property='og:description')
+    if og_desc: og.description = og_desc.get('content')
+    og_image = soup.find('meta', property='og:image')
+    if og_image: og.image = og_image.get('content')
+    og_type = soup.find('meta', property='og:type')
+    if og_type: og.type = og_type.get('content')
+    
+    # Convert HTML to Markdown
+    md = markdownify.markdownify(summary_html, heading_style="ATX").strip()
+    
+    # Convert HTML to plain text
+    summary_soup = BeautifulSoup(summary_html, 'html.parser')
+    text = summary_soup.get_text(separator=' ', strip=True)
+    
+    word_count = len(text.split())
+    
+    metadata = PageMetadata(
+        url=final_url,
+        canonicalUrl=canonical_url,
+        type="article",
+        fetchedAt=datetime.now(timezone.utc).isoformat(),
+        lang=lang,
+        title=title,
+        description=description,
+        wordCount=word_count,
+        readingTimeMinutes=max(1, word_count // 200),
+        interactiveElementCount=0,
+        og=og,
+        jsonLd=None
+    )
+    
+    content = PageContent(
+        markdown=md,
+        text=text,
+        html=summary_html
+    )
+    
+    duration_ms = int((time.time() - start_time) * 1000)
+    
+    stats = FetchStats(
+        method="static",
+        durationMs=duration_ms,
+        estimatedTokens=word_count, # rough proxy
+        truncated=False
+    )
+    
+    return PageData(
+        metadata=metadata,
+        content=content,
+        media=[],
+        interactiveElements=[],
+        fetchStats=stats
+    )
 
 def fetch_json(url: str, **kwargs) -> dict[str, Any]:
-    raw = fetch(url, format="json", **kwargs)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise RawfyError(f"Failed to parse rawfy JSON output: {e}\nRaw output: {raw[:100]}...", code="JSON_PARSE_ERROR", url=url)
+    # Backwards compatibility: just dump the pydantic model
+    page_data = fetch(url, **kwargs)
+    return page_data.model_dump()
 
 def metadata(url: str, **kwargs) -> dict[str, Any]:
-    data = fetch_json(url, max_tokens=10_000, **kwargs)
-    return data.get("metadata", {})
-
-def check_installation() -> dict[str, Any]:
-    return {
-        "node": bool(shutil.which("node")),
-        "rawfy_cli": bool(shutil.which("rawfy")),
-        "npx": bool(shutil.which("npx")),
-        "version": "0.1.1"
-    }
+    page_data = fetch(url, **kwargs)
+    return page_data.metadata.model_dump()
 
 def main() -> None:
     if len(sys.argv) < 2:
@@ -79,9 +180,17 @@ def main() -> None:
         idx = sys.argv.index("--format")
         if idx + 1 < len(sys.argv):
             fmt = sys.argv[idx + 1]  # type: ignore
-    
+            
     try:
-        print(fetch(url, format=fmt))
+        result = fetch(url, format=fmt)
+        if fmt == "json":
+            print(result.model_dump_json(indent=2))
+        elif fmt == "html":
+            print(result.content.html)
+        elif fmt == "text":
+            print(result.content.text)
+        else:
+            print(result.content.markdown)
     except RawfyError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
