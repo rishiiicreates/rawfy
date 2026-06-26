@@ -7,9 +7,23 @@
  * Re-exports the public interface for Node.js consumers.
  */
 
+import { rawfyFetch, rawfyMetadata, rawfyBatch } from './pipeline.js'
+import { serializeWsm } from './output/wsm.js'
+import type { RawfyOptions } from './types.js'
+
+// A wrapper that acts as the main fetch function but also exposes helpers
+export const rawfy = Object.assign(
+  async (url: string, options?: Partial<RawfyOptions>) => rawfyFetch(url, options),
+  {
+    text: async (url: string, options?: Partial<RawfyOptions>) => {
+      const res = await rawfyFetch(url, options)
+      return serializeWsm(res)
+    }
+  }
+)
+
 // Core pipeline functions
-export { rawfyFetch, rawfyFetch as rawfy, rawfyMetadata } from './pipeline.js'
-export { rawfyBatch as batch, rawfyBatch } from './pipeline.js'
+export { rawfyFetch, rawfyMetadata, rawfyBatch, rawfyBatch as batch }
 
 // Output serializers
 export { serializeWsm } from './output/wsm.js'
