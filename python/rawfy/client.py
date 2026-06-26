@@ -18,8 +18,8 @@ def _get_rawfy_cmd() -> list[str]:
     if shutil.which("rawfy"):
         return ["rawfy"]
     if shutil.which("npx"):
-        return ["npx", "-y", "rawfy"]
-    raise RawfyError("rawfy CLI not found. Please install Node.js and run 'npm install -g rawfy'", code="CLI_NOT_FOUND")
+        return ["npx", "-y", "@rishiicreates/rawfy"]
+    raise RawfyError("rawfy CLI not found. Please install Node.js and run 'npm install -g @rishiicreates/rawfy'", code="CLI_NOT_FOUND")
 
 def fetch(
     url: str,
