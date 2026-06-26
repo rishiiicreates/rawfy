@@ -4,41 +4,20 @@
 Add this configuration to your `.mcp.json` or MCP config block:
 ```json
 {
-  "mcpServers": {
-    "rawfy": {
-      "command": "npx",
-      "args": ["-y", "rawfy", "mcp"]
+  "type": "object",
+  "properties": {
+    "content": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      }
     }
   }
 }
-```
-
-## Tool Definitions
-
-### `rawfy_fetch`
-Extracts content from a single URL.
-
-**Input Schema:**
-```json
-{
-  "type": "object",
-  "properties": {
-    "url": { "type": "string", "description": "URL to extract" },
-    "format": { "type": "string", "enum": ["markdown", "json", "text", "html"] },
-    "js": { "type": "boolean", "description": "Enable headless browser" },
-    "wait": { "type": "integer", "description": "Wait time in ms for JS" }
-  },
-  "required": ["url"]
-}
-```
-
-**Output Schema:**
-```json
-{
-  "type": "object",
-  "properties": {
-    "content": { "type": "string" },
-    "title": { "type": "string" }
   }
 }
 ```

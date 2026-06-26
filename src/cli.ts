@@ -11,6 +11,7 @@
  */
 
 import { rawfyFetch } from './pipeline.js'
+import * as fs from 'fs'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
 
@@ -59,7 +60,16 @@ async function main(): Promise<void> {
  * rawfy fetch <url> [flags]
  */
 async function handleFetch(args: string[]): Promise<void> {
-  const url = args.find((a) => !a.startsWith('-'))
+  let url = args.find((a) => !a.startsWith('-'))
+  
+  if (!url && !process.stdin.isTTY) {
+    url = await new Promise<string>((resolve) => {
+      let data = ''
+      process.stdin.on('data', chunk => data += chunk)
+      process.stdin.on('end', () => resolve(data.trim()))
+    })
+  }
+
   if (!url) {
     console.error('rawfy fetch: missing URL argument')
     console.error('Usage: rawfy fetch <url> [--format markdown|json|text]')
@@ -73,6 +83,8 @@ async function handleFetch(args: string[]): Promise<void> {
   const noPlaywright = flags['no-playwright'] !== undefined
   const forcePlaywright = flags['force-playwright'] !== undefined
   const maxTokens = flags['max-tokens'] ? parseInt(flags['max-tokens'], 10) : undefined
+  const timeoutMs = flags['timeout'] ? parseInt(flags['timeout'], 10) : undefined
+  const linksOnly = flags['links-only'] !== undefined
   const outFile = flags['out'] || flags['o']
 
   // Use stderr for progress (keeps stdout clean for pipe)
@@ -84,18 +96,19 @@ async function handleFetch(args: string[]): Promise<void> {
   try {
     const output = await rawfyFetch(
       url,
-      { format, vision, noPlaywright, forcePlaywright, maxTokens },
+      { format, vision, noPlaywright, forcePlaywright, maxTokens, timeoutMs, linksOnly },
       progress,
     )
 
     if (isTTY) process.stderr.write('\r  ✅ done\n')
+    
+    const finalString = typeof output === 'string' ? output : JSON.stringify(output, null, 2)
 
     if (outFile) {
-      const fs = await import('node:fs')
-      fs.writeFileSync(outFile, output, 'utf-8')
+      fs.writeFileSync(outFile, finalString, 'utf-8')
       console.error(`rawfy: output written to ${outFile}`)
     } else {
-      process.stdout.write(output)
+      process.stdout.write(finalString + '\n')
     }
   } catch (err) {
     if (isTTY) process.stderr.write('\r')

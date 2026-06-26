@@ -11,7 +11,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { rawfyFetch, rawfyMetadata } from './pipeline.js'
+import { rawfyFetch, rawfyMetadata, rawfyBatch } from './pipeline.js'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
 
@@ -38,7 +38,7 @@ export async function startMcpServer(): Promise<void> {
       inputSchema: {
         url: z.string().describe('The URL to fetch and process'),
         format: z
-          .enum(['markdown', 'json', 'text'])
+          .enum(['markdown', 'json', 'text', 'html'])
           .default('markdown')
           .describe('Output format: markdown (WSM, default), json, or text'),
         vision: z
@@ -65,7 +65,7 @@ export async function startMcpServer(): Promise<void> {
         })
 
         return {
-          content: [{ type: 'text' as const, text: result }],
+          content: [{ type: 'text' as const, text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
         }
       } catch (err: unknown) {
         const message = isRawfyError(err)
@@ -120,8 +120,33 @@ export async function startMcpServer(): Promise<void> {
     },
   )
 
+// -----------------------------------------------------------------------
+  // rawfy_batch tool
+  // -----------------------------------------------------------------------
+  server.registerTool(
+    'rawfy_batch',
+    {
+      description: 'Fetch and process multiple URLs in parallel.',
+      inputSchema: {
+        urls: z.array(z.string()).describe('Array of URLs to fetch'),
+        format: z.enum(['markdown', 'json', 'text', 'html']).default('markdown'),
+        no_playwright: z.boolean().default(false)
+      }
+    },
+    async ({ urls, format, no_playwright }) => {
+      try {
+        const results = await rawfyBatch(urls, { format: format as OutputFormat, noPlaywright: no_playwright })
+        const text = results.map(r => typeof r === 'string' ? r : JSON.stringify(r, null, 2)).join('\n\n---\n\n')
+        return { content: [{ type: 'text', text }] }
+      } catch (err: unknown) {
+        return { content: [{ type: 'text', text: `Error: ${err}` }], isError: true }
+      }
+    }
+  )
+
   // -----------------------------------------------------------------------
   // Connect transport and start
+
   // -----------------------------------------------------------------------
   const transport = new StdioServerTransport()
   await server.connect(transport)

@@ -28,9 +28,7 @@ import { extractAudio } from './media/audio.js'
 import { extractPdfs } from './media/pdf.js'
 import { estimateTokens, truncate } from './utils/truncate.js'
 import { serializeWsm } from './output/wsm.js'
-import { serializeJson } from './output/json.js'
 import { serializeText } from './output/text.js'
-import { JSDOM } from 'jsdom'
 
 /** Default maximum output tokens */
 const DEFAULT_MAX_TOKENS = 50_000
@@ -47,7 +45,7 @@ export async function rawfyFetch(
   url: string,
   options: RawfyOptions = {},
   progress?: (message: string) => void,
-): Promise<string> {
+): Promise<string | PageData> {
   const format: OutputFormat = options.format || 'markdown'
   const maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS
   const log = progress || (() => {})
@@ -58,12 +56,21 @@ export async function rawfyFetch(
   log('fetching page...')
   const fetchResult = await fetchPage(url, {
     noPlaywright: options.noPlaywright,
+    timeoutMs: options.timeoutMs || 15_000,
     forcePlaywright: options.forcePlaywright,
-    timeoutMs: 15_000,
     onProgress: log,
   })
 
   // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // Links only mode
+  // -----------------------------------------------------------------------
+  if (options.linksOnly) {
+    const { JSDOM } = await import('jsdom')
+    const dom = new JSDOM(fetchResult.html)
+    const links = Array.from(dom.window.document.querySelectorAll('a')).map(a => a.href).filter(Boolean)
+    return format === 'json' ? (links as any) : links.join('\n')
+  }
   // Stage 2: Extract content
   // -----------------------------------------------------------------------
   log('extracting content...')
@@ -74,6 +81,7 @@ export async function rawfyFetch(
   )
 
   // Get plain text for word count (strip HTML tags from readability content)
+  const { JSDOM } = await import('jsdom')
   const dom = new JSDOM(readability.content)
   const bodyText = (dom.window.document.body.textContent || '')
     .replace(/\s+/g, ' ')
@@ -161,11 +169,14 @@ export async function rawfyFetch(
   // Stage 6: Serialize to requested format
   // -----------------------------------------------------------------------
   log('serializing output...')
-  let output: string
+  if (format === 'json') {
+    return pageData
+  }
 
+  let output: string
   switch (format) {
-    case 'json':
-      output = serializeJson(pageData)
+    case 'html':
+      output = fetchResult.html
       break
     case 'text':
       output = serializeText(pageData)
@@ -196,14 +207,15 @@ export async function rawfyFetch(
  */
 export async function rawfyMetadata(
   url: string,
-  options: Pick<RawfyOptions, 'noPlaywright'> = {},
+  options: Pick<RawfyOptions, 'noPlaywright' | 'timeoutMs'> = {},
 ) {
   const fetchResult = await fetchPage(url, {
     noPlaywright: options.noPlaywright,
-    timeoutMs: 15_000,
+    timeoutMs: options.timeoutMs || 15_000,
   })
 
   const readability = extractReadability(fetchResult.html, fetchResult.finalUrl)
+  const { JSDOM } = await import('jsdom')
   const dom = new JSDOM(readability.content)
   const bodyText = (dom.window.document.body.textContent || '')
     .replace(/\s+/g, ' ')
@@ -230,6 +242,6 @@ export async function rawfyBatch(
   urls: string[],
   options: RawfyOptions = {},
   progress?: (message: string) => void,
-): Promise<string[]> {
+): Promise<any[]> {
   return Promise.all(urls.map((url) => rawfyFetch(url, options, progress)))
 }

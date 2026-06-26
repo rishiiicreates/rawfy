@@ -69,9 +69,9 @@ export async function startApiServer(port: number = 3847): Promise<void> {
 
       // Return as appropriate content type
       if (format === 'json') {
-        return c.json(JSON.parse(result))
+        return c.json(result)
       } else {
-        return c.text(result)
+        return c.text(result as string)
       }
     } catch (err) {
       if (isRawfyError(err)) {
