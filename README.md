@@ -97,8 +97,7 @@ rawfy serve
   "mcpServers": {
     "rawfy": {
       "command": "npx",
-      "args": ["-y", "@rishiicreates/rawfy", "serve"],
-      "args": ["serve"]
+      "args": ["-y", "@rishiicreates/rawfy", "serve"]
     }
   }
 }
