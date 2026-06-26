@@ -77,10 +77,13 @@ export async function fetchPlaywright(url: string, options?: FetchOptions): Prom
       ],
     })
 
+    // Check for proxy from environment
+    const proxyUrl = process.env.RAWFY_PROXY || undefined
+
     const context = await browser.newContext({
       userAgent,
-      // Disable JavaScript-based geolocation/permission prompts
       ignoreHTTPSErrors: true,
+      proxy: proxyUrl ? { server: proxyUrl } : undefined,
     })
 
     const page = await context.newPage()

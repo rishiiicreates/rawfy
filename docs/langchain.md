@@ -6,8 +6,8 @@ via the Python wrapper.
 ## Install
 
 ```bash
-npm install -g rawfy     # Node.js CLI
-pip install rawfy        # Python wrapper
+npm install -g @rishiicreates/rawfy     # Node.js CLI
+pip install .        # Python wrapper
 pip install langchain langchain-openai   # LangChain
 ```
 

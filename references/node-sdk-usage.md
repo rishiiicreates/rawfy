@@ -2,7 +2,7 @@
 
 ## Installation
 ```bash
-npm install rawfy
+npm install @rishiicreates/rawfy
 ```
 
 ## Imports

@@ -58,7 +58,7 @@ rawfy install
 ### Python Wrapper
 If you're building agents in Python, you can install the wrapper. It automatically finds the Node.js CLI under the hood.
 ```bash
-pip install rawfy
+pip install .
 ```
 
 ---

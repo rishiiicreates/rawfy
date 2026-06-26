@@ -217,3 +217,19 @@ export async function rawfyMetadata(
     0,
   )
 }
+
+/**
+ * Run the full Rawfy pipeline on multiple URLs in parallel.
+ *
+ * @param urls - Array of URLs to fetch
+ * @param options - Pipeline options
+ * @param progress - Optional progress callback
+ * @returns Array of formatted output strings
+ */
+export async function rawfyBatch(
+  urls: string[],
+  options: RawfyOptions = {},
+  progress?: (message: string) => void,
+): Promise<string[]> {
+  return Promise.all(urls.map((url) => rawfyFetch(url, options, progress)))
+}

@@ -3,7 +3,7 @@
 ## Installation
 ```bash
 # Install globally
-npm install -g rawfy
+npm install -g @rishiicreates/rawfy
 
 # Run via npx
 npx rawfy <url>

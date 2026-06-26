@@ -8,7 +8,8 @@
  */
 
 // Core pipeline functions
-export { rawfyFetch, rawfyMetadata } from './pipeline.js'
+export { rawfyFetch, rawfyFetch as rawfy, rawfyMetadata } from './pipeline.js'
+export { rawfyBatch as batch, rawfyBatch } from './pipeline.js'
 
 // Output serializers
 export { serializeWsm } from './output/wsm.js'

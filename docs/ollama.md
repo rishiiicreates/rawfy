@@ -6,7 +6,7 @@ that support tool calling.
 ## Setup
 
 ```bash
-npm install -g rawfy     # Install CLI
+npm install -g @rishiicreates/rawfy     # Install CLI
 rawfy api --port 3847    # Start REST API
 ```
 
