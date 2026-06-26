@@ -15,7 +15,6 @@ import type {
   RawfyOptions,
   PageData,
   MediaResult,
-  OutputFormat,
 } from './types.js'
 import { fetchPage } from './fetcher/index.js'
 import { extractReadability } from './extractor/readability.js'
@@ -27,8 +26,6 @@ import { extractVideos } from './media/video.js'
 import { extractAudio } from './media/audio.js'
 import { extractPdfs } from './media/pdf.js'
 import { estimateTokens, truncate } from './utils/truncate.js'
-import { serializeWsm } from './output/wsm.js'
-import { serializeText } from './output/text.js'
 
 /** Default maximum output tokens */
 const DEFAULT_MAX_TOKENS = 50_000
@@ -45,8 +42,7 @@ export async function rawfyFetch(
   url: string,
   options: RawfyOptions = {},
   progress?: (message: string) => void,
-): Promise<string | PageData> {
-  const format: OutputFormat = options.format || 'markdown'
+): Promise<PageData> {
   const maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS
   const log = progress || (() => {})
 
@@ -69,7 +65,23 @@ export async function rawfyFetch(
     const { JSDOM } = await import('jsdom')
     const dom = new JSDOM(fetchResult.html)
     const links = Array.from(dom.window.document.querySelectorAll('a')).map(a => a.href).filter(Boolean)
-    return format === 'json' ? (links as any) : links.join('\n')
+    
+    return {
+      metadata: extractMetadata(fetchResult.html, fetchResult.finalUrl, fetchResult.headers, '', 0),
+      content: {
+        markdown: links.join('\n'),
+        text: links.join('\n'),
+        html: fetchResult.html
+      },
+      media: [],
+      interactiveElements: [],
+      fetchStats: {
+        method: fetchResult.method,
+        durationMs: fetchResult.durationMs,
+        estimatedTokens: 0,
+        truncated: false
+      }
+    }
   }
   // Stage 2: Extract content
   // -----------------------------------------------------------------------
@@ -154,6 +166,7 @@ export async function rawfyFetch(
     content: {
       markdown,
       text: plainText,
+      html: fetchResult.html,
     },
     media,
     interactiveElements,
@@ -166,37 +179,16 @@ export async function rawfyFetch(
   }
 
   // -----------------------------------------------------------------------
-  // Stage 6: Serialize to requested format
+  // Stage 6: Truncate if needed
   // -----------------------------------------------------------------------
-  log('serializing output...')
-  if (format === 'json') {
-    return pageData
-  }
-
-  let output: string
-  switch (format) {
-    case 'html':
-      output = fetchResult.html
-      break
-    case 'text':
-      output = serializeText(pageData)
-      break
-    case 'markdown':
-    default:
-      output = serializeWsm(pageData)
-      break
-  }
-
-  // -----------------------------------------------------------------------
-  // Stage 7: Truncate if needed
-  // -----------------------------------------------------------------------
-  const { text: finalOutput, truncated } = truncate(output, maxTokens)
+  const { text: finalMarkdown, truncated } = truncate(markdown, maxTokens)
   if (truncated) {
     pageData.fetchStats.truncated = true
+    pageData.content.markdown = finalMarkdown
   }
 
   log('done')
-  return finalOutput
+  return pageData
 }
 
 /**

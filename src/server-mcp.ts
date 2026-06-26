@@ -14,6 +14,8 @@ import { z } from 'zod'
 import { rawfyFetch, rawfyMetadata, rawfyBatch } from './pipeline.js'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
+import { serializeWsm } from './output/wsm.js'
+import { serializeText } from './output/text.js'
 
 const SERVER_NAME = 'rawfy'
 const SERVER_VERSION = '0.1.0'
@@ -64,8 +66,19 @@ export async function startMcpServer(): Promise<void> {
           maxTokens: max_tokens,
         })
 
+        let text = ''
+        if (format === 'json') {
+          text = JSON.stringify(result, null, 2)
+        } else if (format === 'html') {
+          text = result.content.html
+        } else if (format === 'text') {
+          text = serializeText(result)
+        } else {
+          text = serializeWsm(result)
+        }
+
         return {
-          content: [{ type: 'text' as const, text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text }],
         }
       } catch (err: unknown) {
         const message = isRawfyError(err)
@@ -136,7 +149,12 @@ export async function startMcpServer(): Promise<void> {
     async ({ urls, format, no_playwright }) => {
       try {
         const results = await rawfyBatch(urls, { format: format as OutputFormat, noPlaywright: no_playwright })
-        const text = results.map(r => typeof r === 'string' ? r : JSON.stringify(r, null, 2)).join('\n\n---\n\n')
+        const text = results.map(r => {
+          if (format === 'json') return JSON.stringify(r, null, 2)
+          if (format === 'html') return r.content.html
+          if (format === 'text') return serializeText(r)
+          return serializeWsm(r)
+        }).join('\n\n---\n\n')
         return { content: [{ type: 'text', text }] }
       } catch (err: unknown) {
         return { content: [{ type: 'text', text: `Error: ${err}` }], isError: true }

@@ -70,8 +70,14 @@ export async function startApiServer(port: number = 3847): Promise<void> {
       // Return as appropriate content type
       if (format === 'json') {
         return c.json(result)
+      } else if (format === 'html') {
+        return c.html(result.content.html)
+      } else if (format === 'text') {
+        const { serializeText } = await import('./output/text.js')
+        return c.text(serializeText(result))
       } else {
-        return c.text(result as string)
+        const { serializeWsm } = await import('./output/wsm.js')
+        return c.text(serializeWsm(result))
       }
     } catch (err) {
       if (isRawfyError(err)) {

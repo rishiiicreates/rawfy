@@ -14,6 +14,8 @@ import { rawfyFetch } from './pipeline.js'
 import * as fs from 'fs'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
+import { serializeWsm } from './output/wsm.js'
+import { serializeText } from './output/text.js'
 
 const VERSION = '0.1.0'
 
@@ -45,11 +47,12 @@ async function main(): Promise<void> {
       console.log(VERSION)
       break
     default:
-      // If it looks like a URL, treat as implicit fetch
-      if (command.startsWith('http://') || command.startsWith('https://')) {
+      // Scan for any URL in the arguments if not a known command
+      const hasUrl = args.some(a => a.startsWith('http://') || a.startsWith('https://'))
+      if (hasUrl) {
         await handleFetch(args)
       } else {
-        console.error(`rawfy: unknown command '${command}'`)
+        console.error(`\x1b[31mrawfy: unknown command '${command}'\x1b[0m`)
         console.error("Run 'rawfy --help' for usage.")
         process.exit(1)
       }
@@ -60,7 +63,8 @@ async function main(): Promise<void> {
  * rawfy fetch <url> [flags]
  */
 async function handleFetch(args: string[]): Promise<void> {
-  let url = args.find((a) => !a.startsWith('-'))
+  const { flags, positionals } = parseFlags(args)
+  let url = positionals[0]
   
   if (!url && !process.stdin.isTTY) {
     url = await new Promise<string>((resolve) => {
@@ -76,9 +80,13 @@ async function handleFetch(args: string[]): Promise<void> {
     process.exit(1)
   }
 
-  const flags = parseFlags(args)
-
-  const format = (flags['format'] || flags['f'] || 'markdown') as OutputFormat
+  const formatRaw = flags['format'] || flags['f'] || 'markdown'
+  if (!['markdown', 'json', 'text', 'html'].includes(formatRaw)) {
+    console.error(`\x1b[31mrawfy: invalid format '${formatRaw}'\x1b[0m`)
+    console.error('Allowed formats: markdown, json, text, html')
+    process.exit(1)
+  }
+  const format = formatRaw as OutputFormat
   const vision = flags['vision'] !== undefined
   const noPlaywright = flags['no-playwright'] !== undefined
   const forcePlaywright = flags['force-playwright'] !== undefined
@@ -102,7 +110,22 @@ async function handleFetch(args: string[]): Promise<void> {
 
     if (isTTY) process.stderr.write('\r  ✅ done\n')
     
-    const finalString = typeof output === 'string' ? output : JSON.stringify(output, null, 2)
+    let finalString = ''
+    switch (format) {
+      case 'json':
+        finalString = JSON.stringify(output, null, 2)
+        break
+      case 'html':
+        finalString = output.content.html
+        break
+      case 'text':
+        finalString = serializeText(output)
+        break
+      case 'markdown':
+      default:
+        finalString = serializeWsm(output)
+        break
+    }
 
     if (outFile) {
       fs.writeFileSync(outFile, finalString, 'utf-8')
@@ -137,7 +160,7 @@ async function handleServe(): Promise<void> {
  * rawfy api — start REST API server
  */
 async function handleApi(args: string[]): Promise<void> {
-  const flags = parseFlags(args)
+  const { flags } = parseFlags(args)
   const port = flags['port'] ? parseInt(flags['port'], 10) : 3847
 
   const { startApiServer } = await import('./server-api.js')
@@ -198,8 +221,10 @@ function printUsage(): void {
 /**
  * Parse --key value flags from args.
  */
-function parseFlags(args: string[]): Record<string, string> {
+function parseFlags(args: string[]): { flags: Record<string, string>, positionals: string[] } {
   const flags: Record<string, string> = {}
+  const positionals: string[] = []
+  
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!
     if (arg.startsWith('--')) {
@@ -220,9 +245,11 @@ function parseFlags(args: string[]): Record<string, string> {
       } else {
         flags[key] = 'true'
       }
+    } else {
+      positionals.push(arg)
     }
   }
-  return flags
+  return { flags, positionals }
 }
 
 main().catch((err: unknown) => {

@@ -207,6 +207,8 @@ export interface PageData {
     markdown: string
     /** Plain text body (no formatting) */
     text: string
+    /** Raw HTML body */
+    html: string
   }
   media: MediaResult[]
   interactiveElements: InteractiveElement[]
