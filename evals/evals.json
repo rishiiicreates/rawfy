@@ -1,0 +1,85 @@
+{
+  "skill_name": "rawfy",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "fetch the content of https://example.com as markdown",
+      "expected_output": "...",
+      "expectations": [
+        "Skill triggers correctly based on prompt keywords",
+        "Uses the CLI or SDK interface properly",
+        "Returns the expected markdown content format"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "get me the JSON output from rawfy for this URL",
+      "expected_output": "...",
+      "expectations": [
+        "Invokes tool with `--format json` flag",
+        "Output is successfully parsed as valid JSON",
+        "JSON object matches the defined output schema"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "research this article and summarise it https://example.com/article",
+      "expected_output": "...",
+      "expectations": [
+        "Rawfy is called first to fetch the content",
+        "Content is passed as context to a summarization prompt",
+        "Final output contains a coherent summary of the fetched content"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "get all the links from this webpage https://example.com",
+      "expected_output": "...",
+      "expectations": [
+        "Uses the `--links-only` flag or extracts links from JSON",
+        "Returns a flat array of URLs",
+        "No body content is output, only links"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "use rawfy tool to fetch this page https://example.com",
+      "expected_output": "...",
+      "expectations": [
+        "Identifies explicit MCP context",
+        "Invokes the `rawfy_fetch` MCP tool instead of CLI",
+        "Returns the content properly via tool response"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "fetch the content of https://this-is-an-unreachable-url-123.com",
+      "expected_output": "...",
+      "expectations": [
+        "Gracefully catches network error",
+        "Performs at least one retry attempt",
+        "Surfaces a useful error message instead of crashing"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "this page requires JavaScript to render: https://spa-example.com",
+      "expected_output": "...",
+      "expectations": [
+        "Detects JS requirement from the prompt",
+        "Appends `--js` flag to the command",
+        "Wait time is implicitly or explicitly applied"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "fetch these 3 URLs and give me their titles",
+      "expected_output": "...",
+      "expectations": [
+        "Recognizes multiple URLs in the prompt",
+        "Uses batch mode or a bash loop to fetch concurrently",
+        "Returns structured results mapping URLs to titles"
+      ]
+    }
+  ]
+}
