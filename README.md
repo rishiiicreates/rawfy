@@ -49,7 +49,7 @@ AI Agents struggle to read the web.
 ### Node.js (Primary CLI & Server)
 ```bash
 # Install globally
-npm install -g rawfy
+npm install -g @rishiicreates/rawfy
 
 # Install Playwright browsers (Required for rendering SPAs)
 rawfy install
@@ -96,7 +96,8 @@ rawfy serve
 {
   "mcpServers": {
     "rawfy": {
-      "command": "rawfy",
+      "command": "npx",
+      "args": ["-y", "@rishiicreates/rawfy", "serve"],
       "args": ["serve"]
     }
   }

@@ -168,7 +168,11 @@ async function handleFetch(args: string[]): Promise<void> {
           }
         }
       } catch (err) {
-        console.error(`\nrawfy: warning: failed to fetch ${current.url}`)
+        if (current.depth === 0) {
+          throw err // Fail loudly for the initial URL
+        } else {
+          console.error(`\nrawfy: warning: failed to fetch ${current.url}`)
+        }
       }
     }
 
@@ -292,19 +296,22 @@ function parseFlags(args: string[]): { flags: Record<string, string>, positional
   
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!
+    
+    const isNegativeNumber = (str: string) => /^-?\d+(\.\d+)?$/.test(str)
+
     if (arg.startsWith('--')) {
       const key = arg.slice(2)
       const next = args[i + 1]
-      if (next && !next.startsWith('-')) {
+      if (next && (!next.startsWith('-') || isNegativeNumber(next))) {
         flags[key] = next
         i++
       } else {
         flags[key] = 'true'
       }
-    } else if (arg.startsWith('-') && arg.length === 2) {
+    } else if (arg.startsWith('-') && !isNegativeNumber(arg)) {
       const key = arg.slice(1)
       const next = args[i + 1]
-      if (next && !next.startsWith('-')) {
+      if (next && (!next.startsWith('-') || isNegativeNumber(next))) {
         flags[key] = next
         i++
       } else {
