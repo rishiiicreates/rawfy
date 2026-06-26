@@ -17,7 +17,7 @@ import { rawfyFetch, rawfyMetadata } from './pipeline.js'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
 
-const VERSION = '0.1.0'
+const VERSION = '0.1.1'
 
 /**
  * Start the Rawfy REST API server.

@@ -18,7 +18,7 @@ import { serializeWsm } from './output/wsm.js'
 import { serializeText } from './output/text.js'
 
 const SERVER_NAME = 'rawfy'
-const SERVER_VERSION = '0.1.0'
+const SERVER_VERSION = '0.1.1'
 
 /**
  * Start the MCP server with stdio transport.

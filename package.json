@@ -1,6 +1,6 @@
 {
   "name": "@rishiicreates/rawfy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Universal web perception skill for AI agents — converts any URL into structured, agent-readable content",
   "type": "module",
   "engines": {

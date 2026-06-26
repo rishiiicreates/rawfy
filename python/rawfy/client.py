@@ -65,7 +65,7 @@ def check_installation() -> dict[str, Any]:
         "node": bool(shutil.which("node")),
         "rawfy_cli": bool(shutil.which("rawfy")),
         "npx": bool(shutil.which("npx")),
-        "version": "0.1.0"
+        "version": "0.1.1"
     }
 
 def main() -> None:

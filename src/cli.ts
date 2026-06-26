@@ -14,10 +14,10 @@ import { rawfyFetch } from './pipeline.js'
 import * as fs from 'fs'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
-import { serializeWsm } from './output/wsm.js'
 import { serializeText } from './output/text.js'
+import { serializeWsm } from './output/wsm.js'
 
-const VERSION = '0.1.0'
+const VERSION = '0.1.1'
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
