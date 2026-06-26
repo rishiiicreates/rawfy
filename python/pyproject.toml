@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rawfy"
-version = "0.1.2"
+version = "0.1.3"
 description = "Python wrapper for the Rawfy AI agent skill — converts any URL into structured, agent-readable content"
 readme = "README.md"
 license = {text = "MIT"}

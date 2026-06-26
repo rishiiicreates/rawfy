@@ -50,12 +50,32 @@ export async function rawfyFetch(
   // Stage 1: Fetch
   // -----------------------------------------------------------------------
   log('fetching page...')
-  const fetchResult = await fetchPage(url, {
+  let fetchResult = await fetchPage(url, {
     noPlaywright: options.noPlaywright,
     timeoutMs: options.timeoutMs || 15_000,
     forcePlaywright: options.forcePlaywright,
     onProgress: log,
   })
+
+  // SPA Hydration Wall Heuristic
+  if (!options.noPlaywright && !options.forcePlaywright && fetchResult.method === 'static') {
+    const tempReadability = extractReadability(fetchResult.html, fetchResult.finalUrl)
+    const { JSDOM } = await import('jsdom')
+    const tempDom = new JSDOM(tempReadability.content)
+    const tempText = (tempDom.window.document.body.textContent || '').replace(/\s+/g, '').trim()
+    
+    // If the extracted text is suspiciously short but there are scripts, it's likely a hydration wall
+    const scriptCount = (fetchResult.html.match(/<script/gi) || []).length
+    if (tempText.length < 150 && scriptCount > 0) {
+      log('detected SPA hydration wall, falling back to playwright...')
+      fetchResult = await fetchPage(url, {
+        noPlaywright: false,
+        timeoutMs: options.timeoutMs || 15_000,
+        forcePlaywright: true,
+        onProgress: log,
+      })
+    }
+  }
 
   // -----------------------------------------------------------------------
   // -----------------------------------------------------------------------

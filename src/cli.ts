@@ -27,9 +27,19 @@ const VERSION = pkg.version
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
-  const command = args[0]
+  
+  if (args.length === 0) {
+    if (!process.stdin.isTTY) {
+      await handleFetch([])
+      return
+    }
+    printUsage()
+    process.exit(1)
+  }
 
-  if (!command || command === '--help' || command === '-h') {
+  const command = args[0]!
+
+  if (command === '--help' || command === '-h') {
     printUsage()
     process.exit(0)
   }
