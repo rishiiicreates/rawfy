@@ -1,18 +1,19 @@
 {
   "name": "@rishiicreates/rawfy",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "description": "Universal web perception skill for AI agents — converts any URL into structured, agent-readable content",
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "bin": {
-    "rawfy": "./dist/cli.js"
+    "rawfy": "dist/cli.js"
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
   "files": [

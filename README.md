@@ -58,7 +58,7 @@ rawfy install
 ### Python Wrapper
 If you're building agents in Python, you can install the wrapper. It automatically finds the Node.js CLI under the hood.
 ```bash
-pip install rawfy
+pip install .
 ```
 
 ---
@@ -96,8 +96,8 @@ rawfy serve
 {
   "mcpServers": {
     "rawfy": {
-      "command": "rawfy",
-      "args": ["serve"]
+      "command": "npx",
+      "args": ["-y", "@rishiicreates/rawfy", "serve"]
     }
   }
 }
@@ -118,16 +118,22 @@ curl "http://localhost:3847/fetch?url=https://example.com&format=json"
 
 ### 4. Node.js / TypeScript Library
 
-```typescript
-import { rawfyFetch, rawfyMetadata } from '@rishiicreates/rawfy'
+Rawfy supports both modern ESM (`import`) and legacy CommonJS (`require`).
 
-// Fetch full page as JSON
-const jsonOutput = await rawfyFetch('https://example.com', { 
+```typescript
+import { rawfy, rawfyMetadata } from '@rishiicreates/rawfy'
+
+// 1. Get raw Markdown string instantly (CLI style)
+const markdown = await rawfy.text('https://example.com')
+console.log(markdown)
+
+// 2. Fetch full structured JSON object
+const jsonOutput = await rawfy('https://example.com', { 
   format: 'json',
   noPlaywright: false 
 })
 
-// Fetch lightweight metadata only (No page body)
+// 3. Fetch lightweight metadata only (No page body)
 const metadata = await rawfyMetadata('https://example.com')
 console.log(metadata.title, metadata.type)
 ```

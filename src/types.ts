@@ -212,7 +212,7 @@ export type MediaResult = ImageResult | VideoResult | AudioResult | PdfResult
 // ---------------------------------------------------------------------------
 
 /** Supported output formats */
-export type OutputFormat = 'markdown' | 'json' | 'text'
+export type OutputFormat = 'markdown' | 'json' | 'text' | 'html'
 
 /** Complete page data — the pipeline's final internal representation */
 export interface PageData {
@@ -222,6 +222,8 @@ export interface PageData {
     markdown: string
     /** Plain text body (no formatting) */
     text: string
+    /** Raw HTML body */
+    html: string
   }
   media: MediaResult[]
   interactiveElements: InteractiveElement[]
@@ -245,6 +247,10 @@ export interface RawfyOptions {
   forcePlaywright?: boolean
   /** Maximum output tokens (truncate beyond this) */
   maxTokens?: number
+  /** Fetch timeout in ms */
+  timeoutMs?: number
+  /** Only extract links */
+  linksOnly?: boolean
   /** Write output to file path instead of returning */
   out?: string
 }

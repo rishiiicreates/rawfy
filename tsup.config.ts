@@ -7,7 +7,7 @@ export default defineConfig({
     'server-api': 'src/server-api.ts',
     index: 'src/index.ts',
   },
-  format: ['esm'],
+  format: ['esm', 'cjs'],
   target: 'node18',
   platform: 'node',
   dts: true,

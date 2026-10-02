@@ -1,69 +1,63 @@
-"""
-Rawfy Python client — subprocess wrapper around the Rawfy CLI.
-
-This module shells out to the `rawfy` Node.js CLI and parses
-the output. It requires Node.js >= 18 and `rawfy` to be installed
-globally or available via npx.
-"""
-
-from __future__ import annotations
-
 import json
-import shutil
-import subprocess
 import sys
-from typing import Any, Literal
-
+import time
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
+from pydantic import BaseModel
+import httpx
+from bs4 import BeautifulSoup
+from readability import Document
+import markdownify
 
 class RawfyError(Exception):
-    """Raised when the Rawfy CLI returns an error."""
-
     def __init__(self, message: str, code: str | None = None, url: str | None = None):
         self.code = code
         self.url = url
         super().__init__(message)
-
     def __repr__(self) -> str:
-        parts = [f"RawfyError({self.args[0]!r}"]
-        if self.code:
-            parts.append(f", code={self.code!r}")
-        if self.url:
-            parts.append(f", url={self.url!r}")
-        parts.append(")")
-        return "".join(parts)
+        return f"RawfyError({self.args[0]!r}, code={self.code!r}, url={self.url!r})"
 
+class OpenGraphData(BaseModel):
+    title: Optional[str] = None
+    type: Optional[str] = None
+    description: Optional[str] = None
+    image: Optional[str] = None
+    url: Optional[str] = None
+    siteName: Optional[str] = None
 
-OutputFormat = Literal["markdown", "json", "text"]
+class PageMetadata(BaseModel):
+    url: str
+    canonicalUrl: Optional[str] = None
+    type: str
+    fetchedAt: str
+    lang: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    wordCount: int
+    readingTimeMinutes: int
+    interactiveElementCount: int
+    og: Optional[OpenGraphData] = None
+    jsonLd: Optional[list[Any]] = None
 
+class PageContent(BaseModel):
+    markdown: str
+    text: str
+    html: str
 
-def _find_rawfy_cli() -> list[str]:
-    """
-    Locate the rawfy CLI executable.
+class FetchStats(BaseModel):
+    method: str
+    durationMs: int
+    estimatedTokens: int
+    truncated: bool
 
-    Search order:
-    1. `rawfy` in PATH (global npm install)
-    2. `npx rawfy` (local install / npx resolution)
-    3. `node node_modules/.bin/rawfy` (project-local)
+class PageData(BaseModel):
+    metadata: PageMetadata
+    content: PageContent
+    media: list[dict[str, Any]]
+    interactiveElements: list[dict[str, Any]]
+    fetchStats: FetchStats
 
-    Returns the command prefix as a list of strings.
-    """
-    # 1. Check if rawfy is directly in PATH
-    if shutil.which("rawfy"):
-        return ["rawfy"]
-
-    # 2. Check if npx is available
-    if shutil.which("npx"):
-        return ["npx", "-y", "rawfy"]
-
-    # 3. Check if node is available for direct execution
-    if shutil.which("node"):
-        return ["node", "node_modules/.bin/rawfy"]
-
-    raise RawfyError(
-        "Could not find rawfy CLI. Install it with: npm install -g rawfy",
-        code="CLI_NOT_FOUND",
-    )
-
+OutputFormat = Literal["markdown", "json", "text", "html"]
 
 def fetch(
     url: str,
@@ -73,219 +67,133 @@ def fetch(
     no_playwright: bool = False,
     max_tokens: int = 50_000,
     timeout: int = 30,
-) -> str:
-    """
-    Fetch a URL and return its content in the specified format.
-
-    Args:
-        url: The URL to fetch and process.
-        format: Output format — "markdown" (default), "json", or "text".
-        vision: Enable vision API for image descriptions.
-        no_playwright: Skip Playwright, use static fetch only.
-        max_tokens: Maximum output tokens (default: 50000).
-        timeout: Subprocess timeout in seconds (default: 30).
-
-    Returns:
-        The processed page content as a string.
-
-    Raises:
-        RawfyError: If the fetch fails or the CLI is not found.
-    """
-    cmd = _find_rawfy_cli()
-    cmd.extend(["fetch", url, "--format", format, "--max-tokens", str(max_tokens)])
-
-    if vision:
-        cmd.append("--vision")
-    if no_playwright:
-        cmd.append("--no-playwright")
-
+) -> PageData:
+    start_time = time.time()
+    
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
+        resp = httpx.get(
+            url,
             timeout=timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Rawfy/0.1.1 (Native Python Client)"}
         )
-    except FileNotFoundError:
-        raise RawfyError(
-            "Node.js not found. Rawfy requires Node.js >= 18.",
-            code="NODE_NOT_FOUND",
-        )
-    except subprocess.TimeoutExpired:
-        raise RawfyError(
-            f"Rawfy timed out after {timeout}s fetching {url}",
-            code="TIMEOUT",
-            url=url,
-        )
-
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
-        raise RawfyError(
-            stderr or f"rawfy fetch failed with exit code {result.returncode}",
-            code="FETCH_FAILED",
-            url=url,
-        )
-
-    return result.stdout
-
-
-def fetch_json(
-    url: str,
-    *,
-    vision: bool = False,
-    no_playwright: bool = False,
-    max_tokens: int = 50_000,
-    timeout: int = 30,
-) -> dict[str, Any]:
-    """
-    Fetch a URL and return structured data as a Python dict.
-
-    Convenience wrapper around fetch() with format="json".
-
-    Args:
-        url: The URL to fetch and process.
-        vision: Enable vision API for image descriptions.
-        no_playwright: Skip Playwright, use static fetch only.
-        max_tokens: Maximum output tokens (default: 50000).
-        timeout: Subprocess timeout in seconds (default: 30).
-
-    Returns:
-        Parsed JSON as a dict with keys: metadata, content, media,
-        interactive_elements, fetch_stats.
-
-    Raises:
-        RawfyError: If the fetch fails or JSON parsing fails.
-    """
-    raw = fetch(
-        url,
-        format="json",
-        vision=vision,
-        no_playwright=no_playwright,
-        max_tokens=max_tokens,
-        timeout=timeout,
+        resp.raise_for_status()
+    except httpx.TimeoutException:
+        raise RawfyError("Fetch timed out", code="FETCH_TIMEOUT", url=url)
+    except Exception as e:
+        raise RawfyError(f"Fetch failed: {str(e)}", code="FETCH_FAILED", url=url)
+        
+    html = resp.text
+    final_url = str(resp.url)
+    
+    # Use readability-lxml to extract content
+    doc = Document(html)
+    summary_html = doc.summary()
+    title = doc.title()
+    
+    # Beautiful Soup for additional metadata
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    canonical_tag = soup.find('link', rel='canonical')
+    canonical_url = canonical_tag['href'] if canonical_tag and canonical_tag.has_attr('href') else None
+    
+    lang_tag = soup.find('html')
+    lang = lang_tag.get('lang') if lang_tag else None
+    
+    desc_tag = soup.find('meta', attrs={'name': 'description'})
+    description = desc_tag['content'] if desc_tag and desc_tag.has_attr('content') else None
+    
+    og = OpenGraphData()
+    og_title = soup.find('meta', property='og:title')
+    if og_title: og.title = og_title.get('content')
+    og_desc = soup.find('meta', property='og:description')
+    if og_desc: og.description = og_desc.get('content')
+    og_image = soup.find('meta', property='og:image')
+    if og_image: og.image = og_image.get('content')
+    og_type = soup.find('meta', property='og:type')
+    if og_type: og.type = og_type.get('content')
+    
+    # Convert HTML to Markdown
+    md = markdownify.markdownify(summary_html, heading_style="ATX").strip()
+    
+    # Convert HTML to plain text
+    summary_soup = BeautifulSoup(summary_html, 'html.parser')
+    text = summary_soup.get_text(separator=' ', strip=True)
+    
+    word_count = len(text.split())
+    
+    metadata = PageMetadata(
+        url=final_url,
+        canonicalUrl=canonical_url,
+        type="article",
+        fetchedAt=datetime.now(timezone.utc).isoformat(),
+        lang=lang,
+        title=title,
+        description=description,
+        wordCount=word_count,
+        readingTimeMinutes=max(1, word_count // 200),
+        interactiveElementCount=0,
+        og=og,
+        jsonLd=None
+    )
+    
+    content = PageContent(
+        markdown=md,
+        text=text,
+        html=summary_html
+    )
+    
+    duration_ms = int((time.time() - start_time) * 1000)
+    
+    stats = FetchStats(
+        method="static",
+        durationMs=duration_ms,
+        estimatedTokens=word_count, # rough proxy
+        truncated=False
+    )
+    
+    return PageData(
+        metadata=metadata,
+        content=content,
+        media=[],
+        interactiveElements=[],
+        fetchStats=stats
     )
 
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise RawfyError(
-            f"Failed to parse rawfy JSON output: {e}",
-            code="JSON_PARSE_ERROR",
-            url=url,
-        )
+def fetch_json(url: str, **kwargs) -> dict[str, Any]:
+    # Backwards compatibility: just dump the pydantic model
+    page_data = fetch(url, **kwargs)
+    return page_data.model_dump()
 
-
-def metadata(
-    url: str,
-    *,
-    no_playwright: bool = False,
-    timeout: int = 15,
-) -> dict[str, Any]:
-    """
-    Fetch only the metadata for a URL (lightweight).
-
-    Returns title, description, type, language, word count, etc.
-    without processing media or generating full content.
-
-    Args:
-        url: The URL to fetch metadata for.
-        no_playwright: Skip Playwright, use static fetch only.
-        timeout: Subprocess timeout in seconds (default: 15).
-
-    Returns:
-        Metadata dict with keys: url, title, description, type,
-        lang, word_count, reading_time_minutes, etc.
-
-    Raises:
-        RawfyError: If the fetch fails.
-    """
-    # Use the JSON format and extract just the metadata
-    data = fetch_json(
-        url,
-        no_playwright=no_playwright,
-        max_tokens=10_000,
-        timeout=timeout,
-    )
-    return data.get("metadata", {})
-
-
-def check_installation() -> dict[str, Any]:
-    """
-    Check if Rawfy and its dependencies are properly installed.
-
-    Returns:
-        Dict with installation status:
-        {
-            "node": True/False,
-            "rawfy_cli": True/False,
-            "playwright": True/False,
-            "version": "0.1.0" or None
-        }
-    """
-    status: dict[str, Any] = {
-        "node": False,
-        "rawfy_cli": False,
-        "playwright": False,
-        "version": None,
-    }
-
-    # Check Node.js
-    if shutil.which("node"):
-        status["node"] = True
-
-    # Check rawfy CLI
-    try:
-        cmd = _find_rawfy_cli()
-        result = subprocess.run(
-            [*cmd, "version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            status["rawfy_cli"] = True
-            status["version"] = result.stdout.strip()
-    except (RawfyError, subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-
-    # Check Playwright
-    try:
-        result = subprocess.run(
-            ["npx", "playwright", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            status["playwright"] = True
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-
-    return status
-
+def metadata(url: str, **kwargs) -> dict[str, Any]:
+    page_data = fetch(url, **kwargs)
+    return page_data.metadata.model_dump()
 
 def main() -> None:
-    """CLI entry point for python -m rawfy."""
     if len(sys.argv) < 2:
-        print("Usage: python -m rawfy <url> [--format markdown|json|text]")
+        print("Usage: python -m rawfy <url> [--format markdown|json|text|html]")
         sys.exit(1)
-
+    
     url = sys.argv[1]
     fmt: OutputFormat = "markdown"
-
     if "--format" in sys.argv:
         idx = sys.argv.index("--format")
         if idx + 1 < len(sys.argv):
-            fmt = sys.argv[idx + 1]  # type: ignore[assignment]
-
+            fmt = sys.argv[idx + 1]  # type: ignore
+            
     try:
-        output = fetch(url, format=fmt)
-        print(output)
+        result = fetch(url, format=fmt)
+        if fmt == "json":
+            print(result.model_dump_json(indent=2))
+        elif fmt == "html":
+            print(result.content.html)
+        elif fmt == "text":
+            print(result.content.text)
+        else:
+            print(result.content.markdown)
     except RawfyError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-
-# Entry point for `python -m rawfy`
 if __name__ == "__main__":
     main()

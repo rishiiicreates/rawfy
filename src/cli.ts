@@ -11,16 +11,35 @@
  */
 
 import { rawfyFetch } from './pipeline.js'
+import * as fs from 'fs'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
+import { serializeText } from './output/text.js'
+import { serializeWsm } from './output/wsm.js'
 
-const VERSION = '0.1.0'
+import { fileURLToPath } from 'url'
+import * as path from 'path'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkgPath = path.resolve(__dirname, '../package.json')
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+const VERSION = pkg.version
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
-  const command = args[0]
+  
+  if (args.length === 0) {
+    if (!process.stdin.isTTY) {
+      await handleFetch([])
+      return
+    }
+    printUsage()
+    process.exit(1)
+  }
 
-  if (!command || command === '--help' || command === '-h') {
+  const command = args[0]!
+
+  if (command === '--help' || command === '-h') {
     printUsage()
     process.exit(0)
   }
@@ -44,11 +63,14 @@ async function main(): Promise<void> {
       console.log(VERSION)
       break
     default:
-      // If it looks like a URL, treat as implicit fetch
-      if (command.startsWith('http://') || command.startsWith('https://')) {
+      // Scan for any URL in the arguments if not a known command
+      const hasUrl = args.some(a => a.startsWith('http://') || a.startsWith('https://'))
+      if (hasUrl) {
         await handleFetch(args)
+      } else if (command.startsWith('http')) {
+        await handleFetch(args) // let handleFetch deal with it
       } else {
-        console.error(`rawfy: unknown command '${command}'`)
+        console.error(`\x1b[31mrawfy error: invalid URL format '${command}'. Ensure it starts with http:// or https://\x1b[0m`)
         console.error("Run 'rawfy --help' for usage.")
         process.exit(1)
       }
@@ -59,20 +81,51 @@ async function main(): Promise<void> {
  * rawfy fetch <url> [flags]
  */
 async function handleFetch(args: string[]): Promise<void> {
-  const url = args.find((a) => !a.startsWith('-'))
+  const { flags, positionals } = parseFlags(args)
+  let url = positionals[0]
+  
+  if (!url && !process.stdin.isTTY) {
+    url = await new Promise<string>((resolve) => {
+      let data = ''
+      process.stdin.on('data', chunk => data += chunk)
+      process.stdin.on('end', () => resolve(data.trim()))
+    })
+  }
+
   if (!url) {
     console.error('rawfy fetch: missing URL argument')
     console.error('Usage: rawfy fetch <url> [--format markdown|json|text]')
     process.exit(1)
   }
 
-  const flags = parseFlags(args)
-
-  const format = (flags['format'] || flags['f'] || 'markdown') as OutputFormat
+  const formatRaw = flags['format'] || flags['f'] || 'markdown'
+  if (!['markdown', 'json', 'text', 'html'].includes(formatRaw)) {
+    console.error(`\x1b[31mrawfy: invalid format '${formatRaw}'\x1b[0m`)
+    console.error('Allowed formats: markdown, json, text, html')
+    process.exit(1)
+  }
+  const format = formatRaw as OutputFormat
   const vision = flags['vision'] !== undefined
   const noPlaywright = flags['no-playwright'] !== undefined
   const forcePlaywright = flags['force-playwright'] !== undefined
   const maxTokens = flags['max-tokens'] ? parseInt(flags['max-tokens'], 10) : undefined
+  const timeoutMs = flags['timeout'] ? parseInt(flags['timeout'], 10) : undefined
+  const maxDepth = flags['max-depth'] ? parseInt(flags['max-depth'], 10) : 0
+  
+  if (timeoutMs !== undefined && (isNaN(timeoutMs) || timeoutMs <= 0)) {
+    console.error(`rawfy: invalid timeout value '${flags['timeout']}'`)
+    process.exit(1)
+  }
+  if (maxTokens !== undefined && (isNaN(maxTokens) || maxTokens <= 0)) {
+    console.error(`rawfy: invalid max-tokens value '${flags['max-tokens']}'`)
+    process.exit(1)
+  }
+  if (maxDepth < 0 || isNaN(maxDepth)) {
+    console.error(`rawfy: invalid max-depth value '${flags['max-depth']}'`)
+    process.exit(1)
+  }
+
+  const linksOnly = flags['links-only'] !== undefined
   const outFile = flags['out'] || flags['o']
 
   // Use stderr for progress (keeps stdout clean for pipe)
@@ -82,20 +135,71 @@ async function handleFetch(args: string[]): Promise<void> {
     : undefined
 
   try {
-    const output = await rawfyFetch(
-      url,
-      { format, vision, noPlaywright, forcePlaywright, maxTokens },
-      progress,
-    )
+    const visited = new Set<string>()
+    const results: any[] = []
+    const queue = [{ url, depth: 0 }]
 
-    if (isTTY) process.stderr.write('\r  ✅ done\n')
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      if (visited.has(current.url)) continue
+      visited.add(current.url)
+      
+      if (progress) progress(`Fetching [${current.depth}/${maxDepth}] ${current.url.slice(0, 50)}...`)
+      
+      try {
+        const output = await rawfyFetch(
+          current.url,
+          { format, vision, noPlaywright, forcePlaywright, maxTokens, timeoutMs, linksOnly },
+          undefined
+        )
+        results.push(output)
+
+        if (current.depth < maxDepth) {
+          const baseUrl = new URL(current.url)
+          for (const el of output.interactiveElements) {
+            if (el.type === 'link' && el.href) {
+              try {
+                const nextUrl = new URL(el.href, baseUrl.href).href
+                if (!visited.has(nextUrl) && nextUrl.startsWith('http')) {
+                  queue.push({ url: nextUrl, depth: current.depth + 1 })
+                }
+              } catch {}
+            }
+          }
+        }
+      } catch (err) {
+        if (current.depth === 0) {
+          throw err // Fail loudly for the initial URL
+        } else {
+          console.error(`\nrawfy: warning: failed to fetch ${current.url}`)
+        }
+      }
+    }
+
+    if (isTTY) process.stderr.write('\r  ✅ done                                        \n')
+    
+    let finalString = ''
+    switch (format) {
+      case 'json':
+        finalString = JSON.stringify(maxDepth > 0 ? results : results[0], null, 2)
+        break
+      case 'html':
+        finalString = results.map(r => r.content.html).join('\n<hr/>\n')
+        break
+      case 'text':
+        finalString = results.map(r => serializeText(r)).join('\n\n---\n\n')
+        break
+      case 'markdown':
+      default:
+        finalString = results.map(r => serializeWsm(r)).join('\n\n---\n\n')
+        break
+    }
 
     if (outFile) {
-      const fs = await import('node:fs')
-      fs.writeFileSync(outFile, output, 'utf-8')
+      fs.writeFileSync(outFile, finalString, 'utf-8')
       console.error(`rawfy: output written to ${outFile}`)
     } else {
-      process.stdout.write(output)
+      process.stdout.write(finalString + '\n')
     }
   } catch (err) {
     if (isTTY) process.stderr.write('\r')
@@ -124,7 +228,7 @@ async function handleServe(): Promise<void> {
  * rawfy api — start REST API server
  */
 async function handleApi(args: string[]): Promise<void> {
-  const flags = parseFlags(args)
+  const { flags } = parseFlags(args)
   const port = flags['port'] ? parseInt(flags['port'], 10) : 3847
 
   const { startApiServer } = await import('./server-api.js')
@@ -169,6 +273,7 @@ function printUsage(): void {
     --vision          Enable vision API for image descriptions
     --no-playwright   Skip Playwright, use static fetch only
     --max-tokens <n>  Maximum output tokens (default: 50000)
+    --max-depth <n>   Crawl domain recursively to depth n
     --out <file>      Write output to file instead of stdout
 
   Shorthand:
@@ -185,31 +290,38 @@ function printUsage(): void {
 /**
  * Parse --key value flags from args.
  */
-function parseFlags(args: string[]): Record<string, string> {
+function parseFlags(args: string[]): { flags: Record<string, string>, positionals: string[] } {
   const flags: Record<string, string> = {}
+  const positionals: string[] = []
+  
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!
+    
+    const isNegativeNumber = (str: string) => /^-?\d+(\.\d+)?$/.test(str)
+
     if (arg.startsWith('--')) {
       const key = arg.slice(2)
       const next = args[i + 1]
-      if (next && !next.startsWith('-')) {
+      if (next && (!next.startsWith('-') || isNegativeNumber(next))) {
         flags[key] = next
         i++
       } else {
         flags[key] = 'true'
       }
-    } else if (arg.startsWith('-') && arg.length === 2) {
+    } else if (arg.startsWith('-') && !isNegativeNumber(arg)) {
       const key = arg.slice(1)
       const next = args[i + 1]
-      if (next && !next.startsWith('-')) {
+      if (next && (!next.startsWith('-') || isNegativeNumber(next))) {
         flags[key] = next
         i++
       } else {
         flags[key] = 'true'
       }
+    } else {
+      positionals.push(arg)
     }
   }
-  return flags
+  return { flags, positionals }
 }
 
 main().catch((err: unknown) => {

@@ -15,7 +15,6 @@ import type {
   RawfyOptions,
   PageData,
   MediaResult,
-  OutputFormat,
 } from './types.js'
 import { fetchPage } from './fetcher/index.js'
 import { extractReadability } from './extractor/readability.js'
@@ -27,10 +26,6 @@ import { extractVideos } from './media/video.js'
 import { extractAudio } from './media/audio.js'
 import { extractPdfs } from './media/pdf.js'
 import { estimateTokens, truncate } from './utils/truncate.js'
-import { serializeWsm } from './output/wsm.js'
-import { serializeJson } from './output/json.js'
-import { serializeText } from './output/text.js'
-import { JSDOM } from 'jsdom'
 
 /** Default maximum output tokens */
 const DEFAULT_MAX_TOKENS = 50_000
@@ -47,8 +42,7 @@ export async function rawfyFetch(
   url: string,
   options: RawfyOptions = {},
   progress?: (message: string) => void,
-): Promise<string> {
-  const format: OutputFormat = options.format || 'markdown'
+): Promise<PageData> {
   const maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS
   const log = progress || (() => {})
 
@@ -56,14 +50,59 @@ export async function rawfyFetch(
   // Stage 1: Fetch
   // -----------------------------------------------------------------------
   log('fetching page...')
-  const fetchResult = await fetchPage(url, {
+  let fetchResult = await fetchPage(url, {
     noPlaywright: options.noPlaywright,
+    timeoutMs: options.timeoutMs || 15_000,
     forcePlaywright: options.forcePlaywright,
-    timeoutMs: 15_000,
     onProgress: log,
   })
 
+  // SPA Hydration Wall Heuristic
+  if (!options.noPlaywright && !options.forcePlaywright && fetchResult.method === 'static') {
+    const tempReadability = extractReadability(fetchResult.html, fetchResult.finalUrl)
+    const { JSDOM } = await import('jsdom')
+    const tempDom = new JSDOM(tempReadability.content)
+    const tempText = (tempDom.window.document.body.textContent || '').replace(/\s+/g, '').trim()
+    
+    // If the extracted text is suspiciously short but there are scripts, it's likely a hydration wall
+    const scriptCount = (fetchResult.html.match(/<script/gi) || []).length
+    if (tempText.length < 150 && scriptCount > 0) {
+      log('detected SPA hydration wall, falling back to playwright...')
+      fetchResult = await fetchPage(url, {
+        noPlaywright: false,
+        timeoutMs: options.timeoutMs || 15_000,
+        forcePlaywright: true,
+        onProgress: log,
+      })
+    }
+  }
+
   // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // Links only mode
+  // -----------------------------------------------------------------------
+  if (options.linksOnly) {
+    const { JSDOM } = await import('jsdom')
+    const dom = new JSDOM(fetchResult.html)
+    const links = Array.from(dom.window.document.querySelectorAll('a')).map(a => a.href).filter(Boolean)
+    
+    return {
+      metadata: extractMetadata(fetchResult.html, fetchResult.finalUrl, fetchResult.headers, '', 0),
+      content: {
+        markdown: links.join('\n'),
+        text: links.join('\n'),
+        html: fetchResult.html
+      },
+      media: [],
+      interactiveElements: [],
+      fetchStats: {
+        method: fetchResult.method,
+        durationMs: fetchResult.durationMs,
+        estimatedTokens: 0,
+        truncated: false
+      }
+    }
+  }
   // Stage 2: Extract content
   // -----------------------------------------------------------------------
   log('extracting content...')
@@ -74,6 +113,7 @@ export async function rawfyFetch(
   )
 
   // Get plain text for word count (strip HTML tags from readability content)
+  const { JSDOM } = await import('jsdom')
   const dom = new JSDOM(readability.content)
   const bodyText = (dom.window.document.body.textContent || '')
     .replace(/\s+/g, ' ')
@@ -146,6 +186,7 @@ export async function rawfyFetch(
     content: {
       markdown,
       text: plainText,
+      html: fetchResult.html,
     },
     media,
     interactiveElements,
@@ -158,34 +199,16 @@ export async function rawfyFetch(
   }
 
   // -----------------------------------------------------------------------
-  // Stage 6: Serialize to requested format
+  // Stage 6: Truncate if needed
   // -----------------------------------------------------------------------
-  log('serializing output...')
-  let output: string
-
-  switch (format) {
-    case 'json':
-      output = serializeJson(pageData)
-      break
-    case 'text':
-      output = serializeText(pageData)
-      break
-    case 'markdown':
-    default:
-      output = serializeWsm(pageData)
-      break
-  }
-
-  // -----------------------------------------------------------------------
-  // Stage 7: Truncate if needed
-  // -----------------------------------------------------------------------
-  const { text: finalOutput, truncated } = truncate(output, maxTokens)
+  const { text: finalMarkdown, truncated } = truncate(markdown, maxTokens)
   if (truncated) {
     pageData.fetchStats.truncated = true
+    pageData.content.markdown = finalMarkdown
   }
 
   log('done')
-  return finalOutput
+  return pageData
 }
 
 /**
@@ -196,14 +219,15 @@ export async function rawfyFetch(
  */
 export async function rawfyMetadata(
   url: string,
-  options: Pick<RawfyOptions, 'noPlaywright'> = {},
+  options: Pick<RawfyOptions, 'noPlaywright' | 'timeoutMs'> = {},
 ) {
   const fetchResult = await fetchPage(url, {
     noPlaywright: options.noPlaywright,
-    timeoutMs: 15_000,
+    timeoutMs: options.timeoutMs || 15_000,
   })
 
   const readability = extractReadability(fetchResult.html, fetchResult.finalUrl)
+  const { JSDOM } = await import('jsdom')
   const dom = new JSDOM(readability.content)
   const bodyText = (dom.window.document.body.textContent || '')
     .replace(/\s+/g, ' ')
@@ -216,4 +240,20 @@ export async function rawfyMetadata(
     bodyText,
     0,
   )
+}
+
+/**
+ * Run the full Rawfy pipeline on multiple URLs in parallel.
+ *
+ * @param urls - Array of URLs to fetch
+ * @param options - Pipeline options
+ * @param progress - Optional progress callback
+ * @returns Array of formatted output strings
+ */
+export async function rawfyBatch(
+  urls: string[],
+  options: RawfyOptions = {},
+  progress?: (message: string) => void,
+): Promise<any[]> {
+  return Promise.all(urls.map((url) => rawfyFetch(url, options, progress)))
 }

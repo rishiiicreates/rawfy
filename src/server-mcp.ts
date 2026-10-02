@@ -11,12 +11,20 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { rawfyFetch, rawfyMetadata } from './pipeline.js'
+import { rawfyFetch, rawfyMetadata, rawfyBatch } from './pipeline.js'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
+import { serializeWsm } from './output/wsm.js'
+import { serializeText } from './output/text.js'
+import * as fs from 'fs'
+import { fileURLToPath } from 'url'
+import * as path from 'path'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkgPath = path.resolve(__dirname, '../package.json')
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
 const SERVER_NAME = 'rawfy'
-const SERVER_VERSION = '0.1.0'
+const SERVER_VERSION = pkg.version
 
 /**
  * Start the MCP server with stdio transport.
@@ -38,7 +46,7 @@ export async function startMcpServer(): Promise<void> {
       inputSchema: {
         url: z.string().describe('The URL to fetch and process'),
         format: z
-          .enum(['markdown', 'json', 'text'])
+          .enum(['markdown', 'json', 'text', 'html'])
           .default('markdown')
           .describe('Output format: markdown (WSM, default), json, or text'),
         vision: z
@@ -64,8 +72,19 @@ export async function startMcpServer(): Promise<void> {
           maxTokens: max_tokens,
         })
 
+        let text = ''
+        if (format === 'json') {
+          text = JSON.stringify(result, null, 2)
+        } else if (format === 'html') {
+          text = result.content.html
+        } else if (format === 'text') {
+          text = serializeText(result)
+        } else {
+          text = serializeWsm(result)
+        }
+
         return {
-          content: [{ type: 'text' as const, text: result }],
+          content: [{ type: 'text' as const, text }],
         }
       } catch (err: unknown) {
         const message = isRawfyError(err)
@@ -120,8 +139,38 @@ export async function startMcpServer(): Promise<void> {
     },
   )
 
+// -----------------------------------------------------------------------
+  // rawfy_batch tool
+  // -----------------------------------------------------------------------
+  server.registerTool(
+    'rawfy_batch',
+    {
+      description: 'Fetch and process multiple URLs in parallel.',
+      inputSchema: {
+        urls: z.array(z.string()).describe('Array of URLs to fetch'),
+        format: z.enum(['markdown', 'json', 'text', 'html']).default('markdown'),
+        no_playwright: z.boolean().default(false)
+      }
+    },
+    async ({ urls, format, no_playwright }) => {
+      try {
+        const results = await rawfyBatch(urls, { format: format as OutputFormat, noPlaywright: no_playwright })
+        const text = results.map(r => {
+          if (format === 'json') return JSON.stringify(r, null, 2)
+          if (format === 'html') return r.content.html
+          if (format === 'text') return serializeText(r)
+          return serializeWsm(r)
+        }).join('\n\n---\n\n')
+        return { content: [{ type: 'text', text }] }
+      } catch (err: unknown) {
+        return { content: [{ type: 'text', text: `Error: ${err}` }], isError: true }
+      }
+    }
+  )
+
   // -----------------------------------------------------------------------
   // Connect transport and start
+
   // -----------------------------------------------------------------------
   const transport = new StdioServerTransport()
   await server.connect(transport)

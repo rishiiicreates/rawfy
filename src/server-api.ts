@@ -16,8 +16,14 @@ import { serve } from '@hono/node-server'
 import { rawfyFetch, rawfyMetadata } from './pipeline.js'
 import { isRawfyError } from './utils/errors.js'
 import type { OutputFormat } from './types.js'
+import * as fs from 'fs'
+import { fileURLToPath } from 'url'
+import * as path from 'path'
 
-const VERSION = '0.1.0'
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkgPath = path.resolve(__dirname, '../package.json')
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+const VERSION = pkg.version
 
 /**
  * Start the Rawfy REST API server.
@@ -69,9 +75,15 @@ export async function startApiServer(port: number = 3847): Promise<void> {
 
       // Return as appropriate content type
       if (format === 'json') {
-        return c.json(JSON.parse(result))
+        return c.json(result)
+      } else if (format === 'html') {
+        return c.html(result.content.html)
+      } else if (format === 'text') {
+        const { serializeText } = await import('./output/text.js')
+        return c.text(serializeText(result))
       } else {
-        return c.text(result)
+        const { serializeWsm } = await import('./output/wsm.js')
+        return c.text(serializeWsm(result))
       }
     } catch (err) {
       if (isRawfyError(err)) {

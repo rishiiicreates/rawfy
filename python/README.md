@@ -10,7 +10,7 @@ Python bindings for the [Rawfy](https://github.com/rishiiicreates/rawfy) AI agen
 ## Install
 
 ```bash
-pip install rawfy
+pip install .
 ```
 
 ## Quick Start

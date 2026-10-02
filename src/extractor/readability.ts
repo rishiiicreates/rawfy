@@ -31,6 +31,14 @@ export function extractReadability(html: string, url: string): ReadabilityResult
   const article = reader.parse()
 
   if (article) {
+    // Readability fallback heuristic
+    // If output is suspiciously small but DOM is large, fallback to raw extraction
+    // (e.g., Anthropic API docs which are structured weirdly)
+    const wordCount = (article.content || '').split(/\s+/).length
+    if (wordCount < 100 && html.length > 50000) {
+      return extractBodyFallback(html, url)
+    }
+
     return {
       title: article.title || '',
       content: article.content || '',

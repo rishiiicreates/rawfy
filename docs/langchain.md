@@ -7,7 +7,7 @@ via the Python wrapper.
 
 ```bash
 npm install -g rawfy     # Node.js CLI
-pip install rawfy        # Python wrapper
+pip install .        # Python wrapper
 pip install langchain langchain-openai   # LangChain
 ```
 
