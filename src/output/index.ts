@@ -22,5 +22,7 @@ export function serialize(page: PageData, format: OutputFormat): string {
       return serializeJson(page)
     case 'text':
       return serializeText(page)
+    default:
+      return serializeRfm(page)
   }
 }
