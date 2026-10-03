@@ -22,8 +22,8 @@ import * as path from 'path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkgPath = path.resolve(__dirname, '../package.json')
-const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-const VERSION = pkg.version
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as unknown as { version: string }
+const VERSION: string = pkg.version
 
 /**
  * Start the Rawfy REST API server.
