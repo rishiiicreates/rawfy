@@ -254,6 +254,6 @@ export async function rawfyBatch(
   urls: string[],
   options: RawfyOptions = {},
   progress?: (message: string) => void,
-): Promise<any[]> {
+): Promise<PageData[]> {
   return Promise.all(urls.map((url) => rawfyFetch(url, options, progress)))
 }

@@ -13,7 +13,12 @@
 
 import { JSDOM } from 'jsdom'
 import { YoutubeTranscript } from 'youtube-transcript'
-import type { VideoResult, VideoCaptionTrack } from '../types.js'
+import type {
+  VideoResult,
+  VideoCaptionTrack,
+  YouTubeCaptionTrack,
+  YouTubePlayerConfig,
+} from '../types.js'
 
 /**
  * Extract video information from HTML.
@@ -27,7 +32,7 @@ export async function extractVideos(
   html: string,
   url: string,
   captionTracks: VideoCaptionTrack[] = [],
-  playerConfig?: any,
+  playerConfig?: YouTubePlayerConfig,
 ): Promise<VideoResult[]> {
   const dom = new JSDOM(html, { url })
   const doc = dom.window.document
@@ -147,7 +152,10 @@ function extractYouTubeId(url: string): string | null {
  * Build a VideoResult for a YouTube video.
  * Attempts to fetch the auto-generated transcript.
  */
-async function buildYouTubeResult(videoId: string, playerConfig?: any): Promise<VideoResult> {
+async function buildYouTubeResult(
+  videoId: string,
+  playerConfig?: YouTubePlayerConfig,
+): Promise<VideoResult> {
   const result: VideoResult = {
     type: 'video',
     src: `https://www.youtube.com/watch?v=${videoId}`,
@@ -210,13 +218,16 @@ async function fetchYouTubeTranscript(videoId: string): Promise<string | null> {
 /**
  * Extract YouTube transcript directly from the player config object.
  */
-async function extractTranscriptFromConfig(playerConfig: any): Promise<string | null> {
+async function extractTranscriptFromConfig(
+  playerConfig: YouTubePlayerConfig,
+): Promise<string | null> {
   try {
     const captionTracks = playerConfig?.captions?.playerCaptionsTracklistRenderer?.captionTracks
     if (!captionTracks || captionTracks.length === 0) return null
 
     // Find the English track or just use the first one
-    const track = captionTracks.find((t: any) => t.languageCode === 'en') || captionTracks[0]
+    const track: YouTubeCaptionTrack | undefined =
+      captionTracks.find((t) => t.languageCode === 'en') || captionTracks[0]
     if (!track?.baseUrl) return null
 
     const captionResponse = await fetch(track.baseUrl, {
