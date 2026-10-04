@@ -13,7 +13,7 @@
 import { rawfyFetch } from './pipeline.js'
 import * as fs from 'fs'
 import { isRawfyError } from './utils/errors.js'
-import type { OutputFormat } from './types.js'
+import type { OutputFormat, PageData } from './types.js'
 import { serializeText } from './output/text.js'
 import { serializeWsm } from './output/wsm.js'
 
@@ -22,8 +22,8 @@ import * as path from 'path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkgPath = path.resolve(__dirname, '../package.json')
-const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-const VERSION = pkg.version
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as unknown as { version: string }
+const VERSION: string = pkg.version
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     case '-v':
       console.log(VERSION)
       break
-    default:
+    default: {
       // Scan for any URL in the arguments if not a known command
       const hasUrl = args.some(a => a.startsWith('http://') || a.startsWith('https://'))
       if (hasUrl) {
@@ -74,6 +74,8 @@ async function main(): Promise<void> {
         console.error("Run 'rawfy --help' for usage.")
         process.exit(1)
       }
+      break
+    }
   }
 }
 
@@ -87,8 +89,12 @@ async function handleFetch(args: string[]): Promise<void> {
   if (!url && !process.stdin.isTTY) {
     url = await new Promise<string>((resolve) => {
       let data = ''
-      process.stdin.on('data', chunk => data += chunk)
-      process.stdin.on('end', () => resolve(data.trim()))
+      process.stdin.on('data', (chunk: Buffer | string) => {
+        data += chunk.toString()
+      })
+      process.stdin.on('end', () => {
+        resolve(data.trim())
+      })
     })
   }
 
@@ -136,7 +142,7 @@ async function handleFetch(args: string[]): Promise<void> {
 
   try {
     const visited = new Set<string>()
-    const results: any[] = []
+    const results: PageData[] = []
     const queue = [{ url, depth: 0 }]
 
     while (queue.length > 0) {
@@ -163,7 +169,9 @@ async function handleFetch(args: string[]): Promise<void> {
                 if (!visited.has(nextUrl) && nextUrl.startsWith('http')) {
                   queue.push({ url: nextUrl, depth: current.depth + 1 })
                 }
-              } catch {}
+              } catch {
+                // Ignore malformed links
+              }
             }
           }
         }
@@ -184,7 +192,7 @@ async function handleFetch(args: string[]): Promise<void> {
         finalString = JSON.stringify(maxDepth > 0 ? results : results[0], null, 2)
         break
       case 'html':
-        finalString = results.map(r => r.content.html).join('\n<hr/>\n')
+        finalString = results.map(r => r.content.html || '').join('\n<hr/>\n')
         break
       case 'text':
         finalString = results.map(r => serializeText(r)).join('\n\n---\n\n')

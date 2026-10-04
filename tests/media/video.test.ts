@@ -61,6 +61,33 @@ describe('extractVideos', () => {
       expect(results).toHaveLength(1)
       expect(results[0]!.src).toContain('dQw4w9WgXcQ')
     })
+
+    it('extracts YouTube transcript from player config caption tracks', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: vi.fn().mockResolvedValue('<transcript><text>Hello from captions</text></transcript>'),
+        }),
+      )
+
+      const html = '<html><body><p>No iframe needed</p></body></html>'
+      const results = await extractVideos(
+        html,
+        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        [],
+        {
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [{ languageCode: 'en', baseUrl: 'https://example.com/captions.xml' }],
+            },
+          },
+        },
+      )
+
+      expect(results).toHaveLength(1)
+      expect(results[0]!.transcript).toContain('Hello from captions')
+    })
   })
 
   describe('Vimeo embeds', () => {
