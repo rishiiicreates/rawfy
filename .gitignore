@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 *.tgz
+*.zip
 coverage/
 
 # Playwright
