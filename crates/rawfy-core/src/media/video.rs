@@ -153,7 +153,7 @@ fn find_video_candidates(
             .attr("poster")
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
+            .map(|s| resolve_url(s, page_url));
 
         let duration_seconds = video
             .value()
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(results.len(), 2);
 
         assert_eq!(results[0].src.as_deref(), Some("https://example.com/video.mp4"));
-        assert_eq!(results[0].thumbnail_url.as_deref(), Some("/thumb.jpg"));
+        assert_eq!(results[0].thumbnail_url.as_deref(), Some("https://example.com/thumb.jpg"));
         assert_eq!(results[0].title.as_deref(), Some("Demo Video"));
         assert!(results[0].transcript.as_deref().unwrap().contains("Hello world"));
 

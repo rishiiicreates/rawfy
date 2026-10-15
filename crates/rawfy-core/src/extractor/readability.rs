@@ -13,13 +13,36 @@ use url::Url;
 /// - Enriches results with `excerpt`, `byline`, and `site_name` from metadata.
 pub fn extract_readability(html: &str, url: &str) -> ReadabilityResult {
     let parsed_url = Url::parse(url).unwrap_or_else(|_| Url::parse("https://example.com").unwrap());
-    let mut cursor = Cursor::new(html.as_bytes());
+
+    // Pre-stash <pre> blocks so syntax-highlighting spans and whitespace are not collapsed by Readability
+    let mut stashed_pre = Vec::new();
+    let stashed_html = if let Ok(re_pre) = Regex::new(r"(?is)<pre\b[^>]*>.*?</pre>") {
+        re_pre
+            .replace_all(html, |caps: &regex::Captures| {
+                let idx = stashed_pre.len();
+                stashed_pre.push(caps[0].to_string());
+                format!("<pre data-rawfy-pre=\"{}\">___RAWFY_PRE_BLOCK_{}___</pre>", idx, idx)
+            })
+            .to_string()
+    } else {
+        html.to_string()
+    };
+
+    let mut cursor = Cursor::new(stashed_html.as_bytes());
 
     if let Ok(product) = readability::extractor::extract(&mut cursor, &parsed_url) {
         let word_count = product.content.split_whitespace().count();
 
-        // Heuristic: If output is suspiciously small but HTML is huge (>50KB),
-        // Readability likely stripped too much (e.g. API docs / dashboards).
+        // Table preservation heuristic:
+        // On data/spec-dense pages (like Wikipedia lists or comparison tables),
+        // Readability aggressively strips <table> tags due to low prose density.
+        let orig_has_table = html.contains("<table") || html.contains("<TABLE");
+        let prod_has_table = product.content.contains("<table") || product.content.contains("<TABLE");
+        if orig_has_table && !prod_has_table && (word_count < 300 || html.len() > 30_000) {
+            return extract_body_fallback(html, url);
+        }
+
+        // Suspiciously small output on large documents (>50KB)
         if word_count < 100 && html.len() > 50_000 {
             return extract_body_fallback(html, url);
         }
@@ -31,9 +54,24 @@ pub fn extract_readability(html: &str, url: &str) -> ReadabilityResult {
             product.title.trim().to_string()
         };
 
+        // Restore stashed <pre> code blocks
+        let mut restored_content = product.content;
+        for (idx, original_pre) in stashed_pre.iter().enumerate() {
+            let placeholder_pattern = format!(
+                r#"(?is)<pre\b[^>]*?data-rawfy-pre="{}"[^>]*?>.*?___RAWFY_PRE_BLOCK_{}___.*?</pre>|___RAWFY_PRE_BLOCK_{}___"#,
+                idx, idx, idx
+            );
+            if let Ok(re_restore) = Regex::new(&placeholder_pattern) {
+                restored_content = re_restore.replace_all(&restored_content, original_pre.as_str()).to_string();
+            } else {
+                let ph = format!("___RAWFY_PRE_BLOCK_{}___", idx);
+                restored_content = restored_content.replace(&ph, original_pre);
+            }
+        }
+
         ReadabilityResult {
             title,
-            content: product.content.trim().to_string(),
+            content: restored_content.trim().to_string(),
             excerpt,
             byline,
             site_name,
@@ -49,9 +87,9 @@ pub fn extract_body_fallback(html: &str, _url: &str) -> ReadabilityResult {
     let title = extract_title_fallback(html);
     let (site_name, byline, excerpt) = extract_meta_enrichments(html);
 
-    let raw_content = if let Ok(sel) = Selector::parse("body") {
-        if let Some(body) = document.select(&sel).next() {
-            body.inner_html()
+    let raw_content = if let Ok(sel) = Selector::parse("main, article, [role=\"main\"], body") {
+        if let Some(target) = document.select(&sel).next() {
+            target.inner_html()
         } else {
             html.to_string()
         }
@@ -59,7 +97,7 @@ pub fn extract_body_fallback(html: &str, _url: &str) -> ReadabilityResult {
         html.to_string()
     };
 
-    // Remove <script>, <style>, <noscript> blocks
+    // Remove non-content tags: scripts, styles, noscript, nav, header, footer, aside
     let cleaned = strip_non_content_tags(&raw_content);
 
     ReadabilityResult {
@@ -145,16 +183,27 @@ fn get_meta_attr(document: &Html, attr_name: &str, attr_val: &str) -> Option<Str
 }
 
 fn strip_non_content_tags(html: &str) -> String {
+    let mut cleaned = html.to_string();
+
     // Strip <script>...</script>, <style>...</style>, <noscript>...</noscript>
     if let Ok(re) = Regex::new(r"(?is)<(script|style|noscript)[^>]*>.*?</(script|style|noscript)>") {
-        let stripped = re.replace_all(html, "");
-        // Strip self-closing or empty script/style tags
+        cleaned = re.replace_all(&cleaned, "").to_string();
         if let Ok(re_self) = Regex::new(r"(?is)<(script|style|noscript)[^>]*?/>") {
-            return re_self.replace_all(&stripped, "").to_string();
+            cleaned = re_self.replace_all(&cleaned, "").to_string();
         }
-        return stripped.to_string();
     }
-    html.to_string()
+
+    // Strip chrome/boilerplate tags: <nav>, <header>, <footer>, <aside>, <form>
+    if let Ok(re_chrome) = Regex::new(r"(?is)<(nav|header|footer|aside|form)\b[^>]*>.*?</(nav|header|footer|aside|form)>") {
+        cleaned = re_chrome.replace_all(&cleaned, "").to_string();
+    }
+
+    // Strip jump links
+    if let Ok(re_jump) = Regex::new(r#"(?is)<a\b[^>]*?class="[^"]*mw-jump-link[^"]*"[^>]*?>.*?</a>"#) {
+        cleaned = re_jump.replace_all(&cleaned, "").to_string();
+    }
+
+    cleaned
 }
 
 #[cfg(test)]
@@ -210,5 +259,19 @@ mod tests {
         assert!(!result.content.contains("console.log"));
         assert!(!result.content.contains("color: red"));
         assert!(result.content.contains("Active Tasks"));
+    }
+
+    #[test]
+    fn test_pre_block_whitespace_preservation() {
+        let html = r#"
+            <!DOCTYPE html>
+            <html><body><article>
+                <h1>Code Example</h1>
+                <p>Check out this code snippet below:</p>
+                <pre><code><span class="keyword">fn</span> <span class="ident">main</span>() { <span class="string">"hello"</span>; }</code></pre>
+            </article></body></html>
+        "#;
+        let result = extract_readability(html, "https://example.com/code");
+        assert!(result.content.contains(r#"<pre><code><span class="keyword">fn</span> <span class="ident">main</span>() { <span class="string">"hello"</span>; }</code></pre>"#));
     }
 }

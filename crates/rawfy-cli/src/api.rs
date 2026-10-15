@@ -54,6 +54,7 @@ pub struct ExtractResponse {
     pub title: Option<String>,
     pub content: String,
     pub metadata: rawfy_core::types::PageMetadata,
+    pub interactive_elements: Vec<rawfy_core::types::InteractiveElement>,
     pub links: Vec<LinkInfo>,
     pub format: String,
 }
@@ -169,12 +170,30 @@ async fn fetch_get_handler(Query(query): Query<FetchQuery>) -> Response {
     };
 
     match rawfy_core::rawfy_fetch(&url, &options).await {
-        Ok(result) => match format {
-            OutputFormat::Json => Json(result).into_response(),
-            OutputFormat::Html => Html(result.content.html).into_response(),
-            OutputFormat::Text => serialize_text(&result).into_response(),
-            OutputFormat::Markdown => serialize_wsm(&result).into_response(),
-        },
+        Ok(result) => {
+            let latency_header = (
+                axum::http::HeaderName::from_static("x-response-time-ms"),
+                result.fetch_stats.duration_ms.to_string(),
+            );
+            match format {
+                OutputFormat::Json => ([latency_header], Json(result)).into_response(),
+                OutputFormat::Html => ([latency_header], Html(result.content.html)).into_response(),
+                OutputFormat::Text => (
+                    [
+                        (axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8".to_string()),
+                        (axum::http::HeaderName::from_static("x-response-time-ms"), result.fetch_stats.duration_ms.to_string()),
+                    ],
+                    serialize_text(&result),
+                ).into_response(),
+                OutputFormat::Markdown => (
+                    [
+                        (axum::http::header::CONTENT_TYPE, "text/markdown; charset=utf-8".to_string()),
+                        (axum::http::HeaderName::from_static("x-response-time-ms"), result.fetch_stats.duration_ms.to_string()),
+                    ],
+                    serialize_wsm(&result),
+                ).into_response(),
+            }
+        }
         Err(err) => error_to_response(err, "FETCH_FAILED", Some(url)),
     }
 }
@@ -194,12 +213,30 @@ async fn fetch_post_handler(Json(body): Json<ExtractBody>) -> Response {
     };
 
     match rawfy_core::rawfy_fetch(&body.url, &options).await {
-        Ok(result) => match format {
-            OutputFormat::Json => Json(result).into_response(),
-            OutputFormat::Html => Html(result.content.html).into_response(),
-            OutputFormat::Text => serialize_text(&result).into_response(),
-            OutputFormat::Markdown => serialize_wsm(&result).into_response(),
-        },
+        Ok(result) => {
+            let latency_header = (
+                axum::http::HeaderName::from_static("x-response-time-ms"),
+                result.fetch_stats.duration_ms.to_string(),
+            );
+            match format {
+                OutputFormat::Json => ([latency_header], Json(result)).into_response(),
+                OutputFormat::Html => ([latency_header], Html(result.content.html)).into_response(),
+                OutputFormat::Text => (
+                    [
+                        (axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8".to_string()),
+                        (axum::http::HeaderName::from_static("x-response-time-ms"), result.fetch_stats.duration_ms.to_string()),
+                    ],
+                    serialize_text(&result),
+                ).into_response(),
+                OutputFormat::Markdown => (
+                    [
+                        (axum::http::header::CONTENT_TYPE, "text/markdown; charset=utf-8".to_string()),
+                        (axum::http::HeaderName::from_static("x-response-time-ms"), result.fetch_stats.duration_ms.to_string()),
+                    ],
+                    serialize_wsm(&result),
+                ).into_response(),
+            }
+        }
         Err(err) => error_to_response(err, "FETCH_FAILED", Some(body.url)),
     }
 }
@@ -291,14 +328,21 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
                     })
                     .collect();
 
-                return Json(ExtractResponse {
-                    url: result.metadata.url.clone(),
-                    title: result.metadata.title.clone(),
-                    content,
-                    metadata: result.metadata,
-                    links,
-                    format: format_str.to_string(),
-                })
+                return (
+                    [(
+                        axum::http::HeaderName::from_static("x-response-time-ms"),
+                        "0".to_string(),
+                    )],
+                    Json(ExtractResponse {
+                        url: result.metadata.url.clone(),
+                        title: result.metadata.title.clone(),
+                        content,
+                        metadata: result.metadata,
+                        interactive_elements: result.interactive_elements,
+                        links,
+                        format: format_str.to_string(),
+                    }),
+                )
                 .into_response();
             }
             Err(err) => return error_to_response(err, "EXTRACT_FAILED", Some(body.url)),
@@ -307,6 +351,7 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
 
     match rawfy_core::rawfy_fetch(&body.url, &options).await {
         Ok(result) => {
+            let duration_str = result.fetch_stats.duration_ms.to_string();
             let content = match format {
                 OutputFormat::Json => serialize_json(&result).unwrap_or_default(),
                 OutputFormat::Html => result.content.html.clone(),
@@ -324,14 +369,21 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
                 })
                 .collect();
 
-            Json(ExtractResponse {
-                url: result.metadata.url.clone(),
-                title: result.metadata.title.clone(),
-                content,
-                metadata: result.metadata,
-                links,
-                format: format_str.to_string(),
-            })
+            (
+                [(
+                    axum::http::HeaderName::from_static("x-response-time-ms"),
+                    duration_str,
+                )],
+                Json(ExtractResponse {
+                    url: result.metadata.url.clone(),
+                    title: result.metadata.title.clone(),
+                    content,
+                    metadata: result.metadata,
+                    interactive_elements: result.interactive_elements,
+                    links,
+                    format: format_str.to_string(),
+                }),
+            )
             .into_response()
         }
         Err(err) => error_to_response(err, "EXTRACT_FAILED", Some(body.url)),

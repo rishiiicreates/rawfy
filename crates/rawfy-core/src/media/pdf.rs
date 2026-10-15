@@ -51,7 +51,7 @@ pub async fn extract_pdfs(
 
     let to_process = {
         let document = Html::parse_document(html);
-        let mut candidate_urls = Vec::new();
+        let mut candidate_urls: Vec<(String, Option<String>)> = Vec::new();
         let mut seen = HashSet::new();
 
         // 1. Scan <a> links
@@ -71,8 +71,15 @@ pub async fn extract_pdfs(
 
             if is_pdf {
                 let resolved = resolve_url(href, base_url);
+                let link_text = link.text().collect::<Vec<_>>().join(" ");
+                let trimmed = link_text.trim();
+                let anchor_title = if !trimmed.is_empty() {
+                    Some(trimmed.to_string())
+                } else {
+                    None
+                };
                 if seen.insert(resolved.clone()) {
-                    candidate_urls.push(resolved);
+                    candidate_urls.push((resolved, anchor_title));
                 }
             }
         }
@@ -98,8 +105,13 @@ pub async fn extract_pdfs(
 
             if is_pdf {
                 let resolved = resolve_url(src, base_url);
+                let title = el
+                    .value()
+                    .attr("title")
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
                 if seen.insert(resolved.clone()) {
-                    candidate_urls.push(resolved);
+                    candidate_urls.push((resolved, title));
                 }
             }
         }
@@ -116,8 +128,8 @@ pub async fn extract_pdfs(
         .build()
         .unwrap_or_default();
 
-    for pdf_url in to_process {
-        let title = extract_title_from_url(&pdf_url);
+    for (pdf_url, anchor_title) in to_process {
+        let title = anchor_title.or_else(|| extract_title_from_url(&pdf_url));
         // Attempt fetch
         match client
             .get(&pdf_url)
@@ -242,8 +254,9 @@ mod tests {
         let results = extract_pdfs(html, BASE, None).await;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].src, "https://example.com/docs/manual.pdf");
-        assert_eq!(results[0].title.as_deref(), Some("manual"));
+        assert_eq!(results[0].title.as_deref(), Some("Download Manual"));
         assert_eq!(results[1].src, "https://example.com/files/report.pdf?v=2");
+        assert_eq!(results[1].title.as_deref(), Some("Report"));
     }
 
     #[tokio::test]

@@ -181,6 +181,24 @@ async fn handle_fetch(url: String, cli: &Cli) -> Result<(), Box<dyn std::error::
     let is_quiet = cli.quiet || std::env::var("RAWFY_QUIET").map(|v| v == "1" || v == "true").unwrap_or(false);
     let show_progress = stderr_is_terminal() && !is_quiet;
 
+    if let Some(ref p) = cli.vision_provider {
+        let p_lower = p.to_lowercase();
+        if p_lower != "gemini" && p_lower != "openai" && p_lower != "anthropic" && p_lower != "auto" {
+            eprintln!("rawfy error: invalid --vision-provider '{}'. Valid providers: gemini, openai, anthropic, auto", p);
+            std::process::exit(1);
+        }
+    }
+
+    if cli.vision && !is_quiet {
+        let has_key = std::env::var("GEMINI_API_KEY").is_ok()
+            || std::env::var("GOOGLE_API_KEY").is_ok()
+            || std::env::var("OPENAI_API_KEY").is_ok()
+            || std::env::var("ANTHROPIC_API_KEY").is_ok();
+        if !has_key {
+            eprintln!("ℹ️ Notice: --vision requested but no API key found (GEMINI_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY). Falling back to alt text / DOM descriptions.");
+        }
+    }
+
     if show_progress {
         eprint!("  ⏳ Fetching {}...", url);
         io::stderr().flush().ok();

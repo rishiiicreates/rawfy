@@ -52,6 +52,14 @@ fn extract_attribute(attrs: &str, name: &str) -> Option<String> {
 fn preprocess_html(html: &str, base_url: &str) -> String {
     let mut result = html.to_string();
 
+    // 0. Clean MediaWiki citation tags and jump links
+    if let Ok(re_cite) = Regex::new(r#"(?is)<sup\b[^>]*?(?:class="[^"]*reference[^"]*"|id="cite_ref[^"]*"|data-mw)[^>]*?>.*?</sup>"#) {
+        result = re_cite.replace_all(&result, "").to_string();
+    }
+    if let Ok(re_jump) = Regex::new(r#"(?is)<a\b[^>]*?class="[^"]*mw-jump-link[^"]*"[^>]*?>.*?</a>"#) {
+        result = re_jump.replace_all(&result, "").to_string();
+    }
+
     // 1. Transform <details><summary>Summary</summary>Body</details>
     if let Ok(re_details) = Regex::new(r"(?is)<details\b[^>]*>\s*<summary\b[^>]*>(.*?)</summary>(.*?)</details>") {
         result = re_details
@@ -89,7 +97,7 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
     }
 
     // 3. Transform <video> elements
-    if let Ok(re_video) = Regex::new(r"(?is)<video\b([^>]*)>(.*?)</video>|<video\b([^>]*)/>") {
+    if let Ok(re_video) = Regex::new(r#"(?is)<video\b((?:[^>'"]|"[^"]*"|'[^']*')*)>(.*?)</video>|<video\b((?:[^>'"]|"[^"]*"|'[^']*')*)/>"#) {
         result = re_video
             .replace_all(&result, |caps: &Captures| {
                 let attrs = caps.get(1).or_else(|| caps.get(3)).map(|m| m.as_str()).unwrap_or("");
@@ -127,7 +135,7 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
     }
 
     // 4. Transform <audio> elements
-    if let Ok(re_audio) = Regex::new(r"(?is)<audio\b([^>]*)>(.*?)</audio>|<audio\b([^>]*)/>") {
+    if let Ok(re_audio) = Regex::new(r#"(?is)<audio\b((?:[^>'"]|"[^"]*"|'[^']*')*)>(.*?)</audio>|<audio\b((?:[^>'"]|"[^"]*"|'[^']*')*)/>"#) {
         result = re_audio
             .replace_all(&result, |caps: &Captures| {
                 let attrs = caps.get(1).or_else(|| caps.get(3)).map(|m| m.as_str()).unwrap_or("");
@@ -153,18 +161,33 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
             .to_string();
     }
 
-    // 5. Transform <img> elements
-    if let Ok(re_img) = Regex::new(r"(?is)<img\b([^>]*)>") {
+    // 5. Transform <img> elements (quote-aware to support inline SVG data URLs)
+    if let Ok(re_img) = Regex::new(r#"(?is)<img\b((?:[^>'"]|"[^"]*"|'[^']*')*)>"#) {
         result = re_img
             .replace_all(&result, |caps: &Captures| {
                 let attrs = &caps[1];
-                let alt = extract_attribute(attrs, "alt").unwrap_or_else(|| "no alt text".to_string());
-                let alt_clean = if alt.is_empty() { "no alt text".to_string() } else { alt };
+
+                // Filter 1x1 or <3px tracking pixels
+                let width = extract_attribute(attrs, "width").and_then(|w| w.parse::<u32>().ok());
+                let height = extract_attribute(attrs, "height").and_then(|h| h.parse::<u32>().ok());
+                if let (Some(w), Some(h)) = (width, height) {
+                    if w < 3 || h < 3 {
+                        return String::new();
+                    }
+                }
+
+                let alt = extract_attribute(attrs, "alt").unwrap_or_default();
+                let alt_clean = if alt.trim().is_empty() { "no description".to_string() } else { alt.trim().to_string() };
 
                 let raw_src = extract_attribute(attrs, "src")
                     .or_else(|| extract_attribute(attrs, "data-src"))
                     .or_else(|| extract_attribute(attrs, "data-lazy-src"))
                     .unwrap_or_default();
+
+                let src_lower = raw_src.to_lowercase();
+                if src_lower.contains("spacer.gif") || src_lower.contains("1x1.gif") || src_lower.contains("pixel.png") {
+                    return String::new();
+                }
 
                 if raw_src.is_empty() {
                     format!("<p>[IMAGE: {}]</p>", alt_clean)
@@ -176,7 +199,18 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
             .to_string();
     }
 
-    // 6. Resolve relative URLs in <a> tags
+    // 6. Transform definition lists <dl><dt>...</dt><dd>...</dd></dl> into <ul><li><strong>$1</strong>: $2</li></ul>
+    if let Ok(re_dt_dd) = Regex::new(r"(?is)<dt\b[^>]*>(.*?)</dt>\s*<dd\b[^>]*>(.*?)</dd>") {
+        result = re_dt_dd.replace_all(&result, "<li><strong>$1</strong>: $2</li>").to_string();
+    }
+    if let Ok(re_dl_open) = Regex::new(r"(?is)<dl\b[^>]*>") {
+        result = re_dl_open.replace_all(&result, "<ul>").to_string();
+    }
+    if let Ok(re_dl_close) = Regex::new(r"(?is)</dl>") {
+        result = re_dl_close.replace_all(&result, "</ul>").to_string();
+    }
+
+    // 7. Resolve relative URLs in <a> tags
     if let Ok(re_a) = Regex::new(r#"(?is)(<a\b[^>]*?\bhref\s*=\s*["'])([^"']*)(["'][^>]*)>"#) {
         result = re_a
             .replace_all(&result, |caps: &Captures| {
@@ -203,6 +237,11 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
 
 fn postprocess_markdown(md: &str) -> String {
     let mut text = md.to_string();
+
+    // Ensure space between alphanumeric char and markdown link (e.g. "see[link]" -> "see [link]")
+    if let Ok(re_link_space) = Regex::new(r"([a-zA-Z0-9])(\[[^\]\n]+\]\([^\)\n]+\))") {
+        text = re_link_space.replace_all(&text, "$1 $2").to_string();
+    }
 
     // Collapse 3+ newlines to 2
     if let Ok(re_nl) = Regex::new(r"\n{3,}") {
@@ -255,5 +294,38 @@ mod tests {
         assert!(md.contains("Secret content here"));
         assert!(md.contains("[VIDEO | src: https://example.com/media/demo.mp4 | poster: https://example.com/media/poster.jpg]"));
         assert!(md.contains("[AUDIO | src: https://example.com/media/podcast.mp3]"));
+    }
+
+    #[test]
+    fn test_svg_data_url_and_tracking_pixels() {
+        let html = r#"
+            <div>
+                <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><circle cx='10' cy='10' r='10'/></svg>" alt="Vector Icon" />
+                <img src="/tracker.gif" width="1" height="1" alt="tracking" />
+                <img src="/spacer.gif" alt="" />
+            </div>
+        "#;
+        let md = html_to_markdown(html, "https://example.com");
+        assert!(md.contains("[IMAGE: Vector Icon | src: data:image/svg+xml"));
+        assert!(!md.contains("tracker.gif"));
+        assert!(!md.contains("spacer.gif"));
+    }
+
+    #[test]
+    fn test_definition_lists_and_citations() {
+        let html = r##"
+            <p>Rust is memory safe<sup class="reference" id="cite_ref-1"><a href="#cite_note-1">[1]</a></sup>.</p>
+            <dl>
+                <dt>Ownership</dt>
+                <dd>Each value in Rust has an owner.</dd>
+                <dt>Borrowing</dt>
+                <dd>References can be shared or mutable.</dd>
+            </dl>
+        "##;
+        let md = html_to_markdown(html, "https://example.com");
+        assert!(md.contains("Rust is memory safe"));
+        assert!(!md.contains("[1]"));
+        assert!(md.contains("**Ownership**: Each value in Rust has an owner."));
+        assert!(md.contains("**Borrowing**: References can be shared or mutable."));
     }
 }

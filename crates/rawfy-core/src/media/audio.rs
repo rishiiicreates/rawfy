@@ -186,9 +186,13 @@ fn find_nearby_heading(element: &ElementRef) -> Option<String> {
 
 fn find_transcript_link(element: &ElementRef, base_url: &str) -> Option<String> {
     let mut current = element.parent();
-    for _ in 0..3 {
+    for _ in 0..2 {
         if let Some(parent_node) = current {
             if let Some(parent_el) = ElementRef::wrap(parent_node) {
+                let tag = parent_el.value().name();
+                if tag == "body" || tag == "html" || tag == "main" || tag == "article" {
+                    break;
+                }
                 for link in parent_el.select(link_selector()) {
                     let href = link.value().attr("href").unwrap_or("");
                     let text = link.text().collect::<Vec<_>>().join("").to_lowercase();

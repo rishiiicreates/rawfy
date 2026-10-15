@@ -186,6 +186,31 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                             },
                             "required": ["url"]
                         }
+                    },
+                    {
+                        "name": "rawfy_extract",
+                        "description": "Extract structured content and semantic markdown from raw HTML offline without making network requests.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "html": {
+                                    "type": "string",
+                                    "description": "The raw HTML string to extract from"
+                                },
+                                "url": {
+                                    "type": "string",
+                                    "default": "https://example.com",
+                                    "description": "Base URL for resolving relative links"
+                                },
+                                "format": {
+                                    "type": "string",
+                                    "enum": ["markdown", "json", "text", "html"],
+                                    "default": "markdown",
+                                    "description": "Output format: markdown (default), json, text, or html"
+                                }
+                            },
+                            "required": ["html"]
+                        }
                     }
                 ]
             })),
@@ -300,6 +325,56 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                             id,
                             result: Some(json!({
                                 "content": [{ "type": "text", "text": format!("Rawfy error: {}", e) }],
+                                "isError": true
+                            })),
+                            error: None,
+                        },
+                    }
+                }
+                "rawfy_extract" => {
+                    let html = arguments.get("html").and_then(|h| h.as_str()).unwrap_or("");
+                    if html.is_empty() {
+                        return JsonRpcResponse {
+                            jsonrpc: "2.0".to_string(),
+                            id,
+                            result: Some(json!({
+                                "content": [{ "type": "text", "text": "Error: Missing required argument 'html'" }],
+                                "isError": true
+                            })),
+                            error: None,
+                        };
+                    }
+
+                    let url = arguments.get("url").and_then(|u| u.as_str()).unwrap_or("https://example.com");
+                    let format_str = arguments.get("format").and_then(|f| f.as_str()).unwrap_or("markdown");
+                    let format = format_str.parse::<OutputFormat>().unwrap_or_default();
+                    let options = RawfyOptions {
+                        format,
+                        ..Default::default()
+                    };
+
+                    match rawfy_core::rawfy_extract(html, url, &options) {
+                        Ok(data) => {
+                            let text = match format {
+                                OutputFormat::Json => serialize_json(&data).unwrap_or_default(),
+                                OutputFormat::Html => data.content.html.clone(),
+                                OutputFormat::Text => serialize_text(&data),
+                                OutputFormat::Markdown => serialize_wsm(&data),
+                            };
+                            JsonRpcResponse {
+                                jsonrpc: "2.0".to_string(),
+                                id,
+                                result: Some(json!({
+                                    "content": [{ "type": "text", "text": text }]
+                                })),
+                                error: None,
+                            }
+                        }
+                        Err(e) => JsonRpcResponse {
+                            jsonrpc: "2.0".to_string(),
+                            id,
+                            result: Some(json!({
+                                "content": [{ "type": "text", "text": format!("Rawfy extract error: {}", e) }],
                                 "isError": true
                             })),
                             error: None,

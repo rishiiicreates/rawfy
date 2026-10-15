@@ -79,79 +79,9 @@ fn build_frontmatter(data: &PageData) -> String {
 
 fn build_media_section(media: &[MediaResult]) -> String {
     let mut lines = vec!["## Media".to_string()];
-
     for item in media {
-        match item {
-            MediaResult::Image(img) => {
-                let desc = img
-                    .description
-                    .as_deref()
-                    .or(img.alt.as_deref())
-                    .unwrap_or("no description");
-                let mut line = format!("- [IMAGE: {}", desc);
-                if !img.src.is_empty() {
-                    line.push_str(&format!(" | src: {}", img.src));
-                }
-                if let Some(ref src_type) = img.description_source {
-                    let src_name = match src_type {
-                        crate::types::ImageDescriptionSource::AltText => "alt_text",
-                        crate::types::ImageDescriptionSource::Figcaption => "figcaption",
-                        crate::types::ImageDescriptionSource::Ocr => "ocr",
-                        crate::types::ImageDescriptionSource::VisionApi => "vision_api",
-                    };
-                    if src_name != "alt_text" {
-                        line.push_str(&format!(" | via: {}", src_name));
-                    }
-                }
-                line.push(']');
-                lines.push(line);
-            }
-            MediaResult::Video(vid) => {
-                let mut line = "- [VIDEO".to_string();
-                if let Some(ref title) = vid.title {
-                    line.push_str(&format!(": \"{}\"", title));
-                }
-                if let Some(ref src) = vid.src {
-                    line.push_str(&format!(" | src: {}", src));
-                }
-                if let Some(ref trans) = vid.transcript {
-                    let truncated = if trans.chars().count() > 200 {
-                        let t: String = trans.chars().take(197).collect();
-                        format!("{}...", t)
-                    } else {
-                        trans.clone()
-                    };
-                    line.push_str(&format!(" | transcript: {}", truncated));
-                }
-                line.push(']');
-                lines.push(line);
-            }
-            MediaResult::Audio(aud) => {
-                let mut line = "- [AUDIO".to_string();
-                if let Some(ref title) = aud.title {
-                    line.push_str(&format!(": \"{}\"", title));
-                }
-                if let Some(ref src) = aud.src {
-                    line.push_str(&format!(" | src: {}", src));
-                }
-                line.push(']');
-                lines.push(line);
-            }
-            MediaResult::Pdf(pdf) => {
-                let mut line = "- [PDF".to_string();
-                if let Some(ref title) = pdf.title {
-                    line.push_str(&format!(": \"{}\"", title));
-                }
-                if let Some(pages) = pdf.page_count {
-                    line.push_str(&format!(" | {} pages", pages));
-                }
-                line.push_str(&format!(" | src: {}", pdf.src));
-                line.push(']');
-                lines.push(line);
-            }
-        }
+        lines.push(format!("- {}", crate::media::format_media(item)));
     }
-
     lines.join("\n")
 }
 

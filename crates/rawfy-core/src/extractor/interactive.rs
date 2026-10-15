@@ -76,7 +76,7 @@ fn resolve_label(
     }
 
     // 2. Inner Text
-    let text_content = collapse_whitespace(&element.text().collect::<String>());
+    let text_content = collapse_whitespace(&element.text().collect::<Vec<_>>().join(" "));
     if !text_content.is_empty() && !is_gibberish(&text_content) {
         return text_content;
     }
