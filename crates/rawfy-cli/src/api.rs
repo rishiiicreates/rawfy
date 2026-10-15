@@ -31,8 +31,15 @@ pub struct MetadataQuery {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct MetadataBody {
+    pub url: String,
+    pub no_playwright: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ExtractBody {
     pub url: String,
+    pub html: Option<String>,
     pub format: Option<String>,
     pub vision: Option<bool>,
     pub vision_provider: Option<String>,
@@ -75,9 +82,34 @@ pub fn create_router() -> Router {
         .route("/health", get(health_handler))
         .route("/version", get(version_handler))
         .route("/fetch", get(fetch_get_handler).post(fetch_post_handler))
-        .route("/metadata", get(metadata_handler))
+        .route("/metadata", get(metadata_handler).post(metadata_post_handler))
         .route("/extract", post(extract_handler))
         .layer(cors)
+}
+
+fn error_to_response(err: rawfy_core::types::RawfyError, default_code: &str, url: Option<String>) -> Response {
+    let status = match &err {
+        rawfy_core::types::RawfyError::InvalidUrl { .. } => StatusCode::BAD_REQUEST,
+        rawfy_core::types::RawfyError::FetchTimeout { .. } => StatusCode::GATEWAY_TIMEOUT,
+        rawfy_core::types::RawfyError::FetchFailed { message, .. } => {
+            if message.contains("404") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::BAD_GATEWAY
+            }
+        }
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    (
+        status,
+        Json(ErrorResponse {
+            error: default_code.to_string(),
+            message: err.to_string(),
+            url,
+        }),
+    )
+        .into_response()
 }
 
 pub async fn start_api_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
@@ -143,15 +175,7 @@ async fn fetch_get_handler(Query(query): Query<FetchQuery>) -> Response {
             OutputFormat::Text => serialize_text(&result).into_response(),
             OutputFormat::Markdown => serialize_wsm(&result).into_response(),
         },
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "FETCH_FAILED".to_string(),
-                message: err.to_string(),
-                url: Some(url),
-            }),
-        )
-            .into_response(),
+        Err(err) => error_to_response(err, "FETCH_FAILED", Some(url)),
     }
 }
 
@@ -176,15 +200,7 @@ async fn fetch_post_handler(Json(body): Json<ExtractBody>) -> Response {
             OutputFormat::Text => serialize_text(&result).into_response(),
             OutputFormat::Markdown => serialize_wsm(&result).into_response(),
         },
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "FETCH_FAILED".to_string(),
-                message: err.to_string(),
-                url: Some(body.url),
-            }),
-        )
-            .into_response(),
+        Err(err) => error_to_response(err, "FETCH_FAILED", Some(body.url)),
     }
 }
 
@@ -211,15 +227,31 @@ async fn metadata_handler(Query(query): Query<MetadataQuery>) -> Response {
 
     match rawfy_core::rawfy_metadata(&url, &options).await {
         Ok(metadata) => Json(metadata).into_response(),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
+        Err(err) => error_to_response(err, "METADATA_FAILED", Some(url)),
+    }
+}
+
+async fn metadata_post_handler(Json(body): Json<MetadataBody>) -> Response {
+    if body.url.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                error: "METADATA_FAILED".to_string(),
-                message: err.to_string(),
-                url: Some(url),
+                error: "BAD_REQUEST".to_string(),
+                message: "Missing required field: url".to_string(),
+                url: None,
             }),
         )
-            .into_response(),
+            .into_response();
+    }
+
+    let options = RawfyOptions {
+        no_playwright: body.no_playwright.unwrap_or(false),
+        ..Default::default()
+    };
+
+    match rawfy_core::rawfy_metadata(&body.url, &options).await {
+        Ok(metadata) => Json(metadata).into_response(),
+        Err(err) => error_to_response(err, "METADATA_FAILED", Some(body.url)),
     }
 }
 
@@ -237,6 +269,41 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
         max_tokens: body.max_tokens,
         ..Default::default()
     };
+
+    // If caller passed raw html, extract directly from it offline
+    if let Some(ref raw_html) = body.html {
+        match rawfy_core::rawfy_extract(raw_html, &body.url, &options) {
+            Ok(result) => {
+                let content = match format {
+                    OutputFormat::Json => serialize_json(&result).unwrap_or_default(),
+                    OutputFormat::Html => result.content.html.clone(),
+                    OutputFormat::Text => serialize_text(&result),
+                    OutputFormat::Markdown => serialize_wsm(&result),
+                };
+
+                let links: Vec<LinkInfo> = result
+                    .interactive_elements
+                    .iter()
+                    .filter(|e| e.r#type == rawfy_core::types::InteractiveElementType::Link)
+                    .map(|e| LinkInfo {
+                        label: e.label.clone(),
+                        href: e.href.clone().unwrap_or_default(),
+                    })
+                    .collect();
+
+                return Json(ExtractResponse {
+                    url: result.metadata.url.clone(),
+                    title: result.metadata.title.clone(),
+                    content,
+                    metadata: result.metadata,
+                    links,
+                    format: format_str.to_string(),
+                })
+                .into_response();
+            }
+            Err(err) => return error_to_response(err, "EXTRACT_FAILED", Some(body.url)),
+        }
+    }
 
     match rawfy_core::rawfy_fetch(&body.url, &options).await {
         Ok(result) => {
@@ -267,14 +334,6 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
             })
             .into_response()
         }
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "EXTRACT_FAILED".to_string(),
-                message: err.to_string(),
-                url: Some(body.url),
-            }),
-        )
-            .into_response(),
+        Err(err) => error_to_response(err, "EXTRACT_FAILED", Some(body.url)),
     }
 }

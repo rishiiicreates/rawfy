@@ -27,7 +27,7 @@ struct Cli {
     url: Option<String>,
 
     /// Output format: markdown, json, text, html (default: markdown)
-    #[arg(short = 'f', long, global = true, default_value = "markdown")]
+    #[arg(short = 'f', long, global = true, default_value = "markdown", value_parser = ["markdown", "json", "text", "html", "md", "txt"])]
     format: String,
 
     /// Enable AI-powered image descriptions via Vision API
@@ -65,6 +65,10 @@ struct Cli {
     /// Extract only interactive links
     #[arg(long, global = true)]
     links_only: bool,
+
+    /// Suppress progress spinner and notices
+    #[arg(short = 'q', long, global = true)]
+    quiet: bool,
 }
 
 #[derive(Subcommand)]
@@ -147,7 +151,8 @@ fn resolve_url(cmd_url: Option<String>, root_url: Option<String>) -> Result<Stri
             return Ok(trimmed);
         }
     }
-    Err("Missing URL argument. Usage: rawfy fetch <url>".into())
+    eprintln!("rawfy error: missing URL. Run 'rawfy fetch <url>' or 'rawfy --help' for usage.");
+    std::process::exit(1);
 }
 
 fn stdin_is_terminal() -> bool {
@@ -173,14 +178,17 @@ async fn handle_fetch(url: String, cli: &Cli) -> Result<(), Box<dyn std::error::
         out: cli.out.as_ref().map(|p| p.to_string_lossy().to_string()),
     };
 
-    if stderr_is_terminal() {
+    let is_quiet = cli.quiet || std::env::var("RAWFY_QUIET").map(|v| v == "1" || v == "true").unwrap_or(false);
+    let show_progress = stderr_is_terminal() && !is_quiet;
+
+    if show_progress {
         eprint!("  ⏳ Fetching {}...", url);
         io::stderr().flush().ok();
     }
 
     match rawfy_core::rawfy_fetch(&url, &options).await {
         Ok(data) => {
-            if stderr_is_terminal() {
+            if show_progress {
                 eprint!("\r\x1b[2K\r"); // Clear spinner line
                 io::stderr().flush().ok();
             }
@@ -193,20 +201,29 @@ async fn handle_fetch(url: String, cli: &Cli) -> Result<(), Box<dyn std::error::
             };
 
             if let Some(ref path) = cli.out {
-                std::fs::write(path, &output)?;
-                if stderr_is_terminal() {
+                if let Some(parent) = path.parent() {
+                    if !parent.as_os_str().is_empty() {
+                        std::fs::create_dir_all(parent).map_err(|e| {
+                            format!("Failed to create directory {}: {}", parent.display(), e)
+                        })?;
+                    }
+                }
+                std::fs::write(path, &output).map_err(|e| {
+                    format!("Failed to write to {}: {}", path.display(), e)
+                })?;
+                if show_progress {
                     eprintln!("✅ Output written to {}", path.display());
                 }
             } else {
                 println!("{}", output);
             }
 
-            if stderr_is_terminal() {
+            if show_progress {
                 eprintln!("\n⭐ If you like Rawfy, please star the repo on GitHub: https://github.com/rishiiicreates/rawfy");
             }
         }
         Err(err) => {
-            if stderr_is_terminal() {
+            if show_progress {
                 eprint!("\r\x1b[2K\r");
                 io::stderr().flush().ok();
             }

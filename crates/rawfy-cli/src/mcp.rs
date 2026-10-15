@@ -2,22 +2,14 @@ use rawfy_core::{
     output::{serialize_json, serialize_text, serialize_wsm},
     types::{OutputFormat, RawfyOptions},
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 pub const SERVER_NAME: &str = "rawfy";
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[derive(Debug, Deserialize)]
-struct JsonRpcRequest {
-    #[allow(dead_code)]
-    jsonrpc: String,
-    id: Option<Value>,
-    method: String,
-    #[serde(default)]
-    params: Option<Value>,
-}
+
 
 #[derive(Debug, Serialize)]
 struct JsonRpcResponse {
@@ -40,8 +32,8 @@ pub async fn run_mcp_stdio_server() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        let req: JsonRpcRequest = match serde_json::from_str(line) {
-            Ok(r) => r,
+        let val: Value = match serde_json::from_str(line) {
+            Ok(v) => v,
             Err(e) => {
                 let err_resp = json!({
                     "jsonrpc": "2.0",
@@ -59,13 +51,51 @@ pub async fn run_mcp_stdio_server() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        // If notification (no id), handle and don't reply
-        if req.id.is_none() {
+        let obj = match val.as_object() {
+            Some(o) => o,
+            None => {
+                let err_resp = json!({
+                    "jsonrpc": "2.0",
+                    "id": null,
+                    "error": {
+                        "code": -32600,
+                        "message": "Invalid Request: expected object"
+                    }
+                });
+                let mut out = serde_json::to_string(&err_resp)?;
+                out.push('\n');
+                stdout.write_all(out.as_bytes()).await?;
+                stdout.flush().await?;
+                continue;
+            }
+        };
+
+        // Check for missing jsonrpc member (code: -32600)
+        if !obj.contains_key("jsonrpc") {
+            let err_resp = json!({
+                "jsonrpc": "2.0",
+                "id": obj.get("id").cloned().unwrap_or(Value::Null),
+                "error": {
+                    "code": -32600,
+                    "message": "Invalid Request: missing 'jsonrpc' field"
+                }
+            });
+            let mut out = serde_json::to_string(&err_resp)?;
+            out.push('\n');
+            stdout.write_all(out.as_bytes()).await?;
+            stdout.flush().await?;
             continue;
         }
-        let id = req.id.unwrap();
 
-        let response = handle_request(&req.method, req.params.as_ref(), id).await;
+        // Notification: "id" member is completely omitted
+        if !obj.contains_key("id") {
+            continue;
+        }
+        let id = obj.get("id").cloned().unwrap_or(Value::Null);
+        let method = obj.get("method").and_then(|m| m.as_str()).unwrap_or("");
+        let params = obj.get("params");
+
+        let response = handle_request(method, params, id).await;
         let mut out = serde_json::to_string(&response)?;
         out.push('\n');
         stdout.write_all(out.as_bytes()).await?;
@@ -117,7 +147,7 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                                     "type": "string",
                                     "enum": ["markdown", "json", "text", "html"],
                                     "default": "markdown",
-                                    "description": "Output format: markdown (WSM, default), json, or text"
+                                    "description": "Output format: markdown (WSM, default), json, text, or html"
                                 },
                                 "vision": {
                                     "type": "boolean",
@@ -130,7 +160,7 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                                     "description": "Skip Playwright, use static fetch only"
                                 },
                                 "max_tokens": {
-                                    "type": "number",
+                                    "type": "integer",
                                     "default": 50000,
                                     "description": "Maximum output tokens (default: 50000)"
                                 }
@@ -187,7 +217,15 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                     let format = format_str.parse::<OutputFormat>().unwrap_or_default();
                     let vision = arguments.get("vision").and_then(|v| v.as_bool()).unwrap_or(false);
                     let no_playwright = arguments.get("no_playwright").and_then(|p| p.as_bool()).unwrap_or(false);
-                    let max_tokens = arguments.get("max_tokens").and_then(|m| m.as_u64()).map(|m| m as usize);
+                    let max_tokens = arguments.get("max_tokens").and_then(|m| {
+                        if let Some(u) = m.as_u64() {
+                            Some(u as usize)
+                        } else if let Some(f) = m.as_f64() {
+                            Some(f as usize)
+                        } else {
+                            None
+                        }
+                    });
 
                     let options = RawfyOptions {
                         format,
@@ -271,11 +309,11 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                 _ => JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
                     id,
-                    result: None,
-                    error: Some(json!({
-                        "code": -32601,
-                        "message": format!("Method not found: {}", tool_name)
+                    result: Some(json!({
+                        "content": [{ "type": "text", "text": format!("Tool '{}' not found", tool_name) }],
+                        "isError": true
                     })),
+                    error: None,
                 },
             }
         }

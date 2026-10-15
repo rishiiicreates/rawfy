@@ -16,6 +16,22 @@ pub use static_fetcher::{
 
 use crate::types::{FetchResult, RawfyError, RawfyOptions};
 
+/// Normalizes a user-supplied URL.
+/// If the URL lacks a scheme but looks like a domain (contains '.' or starts with 'localhost'),
+/// 'https://' is automatically prepended.
+pub fn normalize_url(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if !trimmed.contains("://") && !trimmed.starts_with("//") {
+        if trimmed.starts_with("localhost") || trimmed.contains('.') {
+            format!("https://{}", trimmed)
+        } else {
+            trimmed.to_string()
+        }
+    } else {
+        trimmed.to_string()
+    }
+}
+
 /// Unified fetch page router.
 ///
 /// 1. Validates the URL upfront (protocol must be http or https).
@@ -27,8 +43,10 @@ use crate::types::{FetchResult, RawfyError, RawfyOptions};
 ///
 /// Returns `FetchResult` or `RawfyError`.
 pub async fn fetch_page(url: &str, options: &RawfyOptions) -> Result<FetchResult, RawfyError> {
+    let normalized = normalize_url(url);
+
     // 1. Validate URL upfront
-    let parsed = url::Url::parse(url).map_err(|e| RawfyError::InvalidUrl {
+    let parsed = url::Url::parse(&normalized).map_err(|e| RawfyError::InvalidUrl {
         message: format!("Invalid URL: {}: {}", url, e),
         url: Some(url.to_string()),
     })?;
@@ -41,7 +59,7 @@ pub async fn fetch_page(url: &str, options: &RawfyOptions) -> Result<FetchResult
     }
 
     // 2. Perform static fetch
-    let static_result = fetch_static(url, Some(options)).await?;
+    let static_result = fetch_static(&normalized, Some(options)).await?;
 
     // 3. If Playwright is explicitly disabled, return static result directly
     if options.no_playwright {

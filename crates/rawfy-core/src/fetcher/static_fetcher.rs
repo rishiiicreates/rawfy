@@ -63,7 +63,7 @@ pub async fn fetch_static(
         Ok(u) => u,
         Err(e) => {
             return Err(RawfyError::InvalidUrl {
-                message: format!("Invalid URL: {}: {}", url, e),
+                message: format!("{}: {}", url, e),
                 url: Some(url.to_string()),
             });
         }
@@ -117,6 +117,26 @@ pub async fn fetch_static(
         let reason = status.canonical_reason().unwrap_or("");
         return Err(RawfyError::FetchFailed {
             message: format!("HTTP {} {}", status_code, reason).trim().to_string(),
+            url: Some(url.to_string()),
+        });
+    }
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if content_type.starts_with("image/")
+        || content_type.starts_with("video/")
+        || content_type.starts_with("audio/")
+    {
+        return Err(RawfyError::FetchFailed {
+            message: format!(
+                "URL returned binary media content type: {}. Direct media binary inspection is not supported.",
+                content_type
+            ),
             url: Some(url.to_string()),
         });
     }

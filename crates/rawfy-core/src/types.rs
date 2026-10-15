@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 pub enum RawfyError {
-    #[error("Invalid URL: {message}")]
+    #[error("{message}")]
     InvalidUrl { message: String, url: Option<String> },
 
     #[error("Fetch timeout: {message}")]
@@ -157,6 +157,7 @@ pub enum ImageDescriptionSource {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageResult {
+    #[serde(default, skip_serializing)]
     pub r#type: String, // "image"
     pub src: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -169,6 +170,7 @@ pub struct ImageResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VideoResult {
+    #[serde(default, skip_serializing)]
     pub r#type: String, // "video"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub src: Option<String>,
@@ -184,6 +186,7 @@ pub struct VideoResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioResult {
+    #[serde(default, skip_serializing)]
     pub r#type: String, // "audio"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub src: Option<String>,
@@ -197,6 +200,7 @@ pub struct AudioResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PdfResult {
+    #[serde(default, skip_serializing)]
     pub r#type: String, // "pdf"
     pub src: String,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -38,7 +38,15 @@ pub fn truncate(text: &str, max_tokens: usize) -> TruncateResult {
         char_count += 1;
     }
 
-    let truncated_slice = &text[..byte_index];
+    let mut cut_index = byte_index;
+    // Walk back to find the nearest whitespace or newline boundary within reasonable distance
+    if let Some(last_space) = text[..byte_index].rfind(|c: char| c.is_whitespace() || c == '\n') {
+        if byte_index - last_space < 30 {
+            cut_index = last_space;
+        }
+    }
+
+    let truncated_slice = text[..cut_index].trim_end();
     let omitted = estimated.saturating_sub(max_tokens);
     let notice = format!(
         "\n\n[TRUNCATED: output exceeded {} token limit. ~{} tokens omitted. Use --max-tokens to increase limit.]",
