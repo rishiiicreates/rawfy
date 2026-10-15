@@ -31,6 +31,8 @@
     "format:check": "prettier --check 'src/**/*.ts'",
     "start:mcp": "node dist/server-mcp.js",
     "start:api": "node dist/server-api.js",
+    "build:rust": "cargo build --release --workspace",
+    "test:rust": "cargo test --workspace",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

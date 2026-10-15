@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/rawfy-core",
+    "crates/rawfy-cli",
+]
+resolver = "2"

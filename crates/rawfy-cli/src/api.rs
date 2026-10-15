@@ -1,0 +1,280 @@
+use axum::{
+    extract::Query,
+    http::StatusCode,
+    response::{Html, IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
+};
+use rawfy_core::{
+    output::{serialize_json, serialize_text, serialize_wsm},
+    types::{OutputFormat, RawfyOptions},
+};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use tower_http::cors::{Any, CorsLayer};
+
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Deserialize)]
+pub struct FetchQuery {
+    pub url: Option<String>,
+    pub format: Option<String>,
+    pub vision: Option<bool>,
+    pub no_playwright: Option<bool>,
+    pub max_tokens: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MetadataQuery {
+    pub url: Option<String>,
+    pub no_playwright: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExtractBody {
+    pub url: String,
+    pub format: Option<String>,
+    pub vision: Option<bool>,
+    pub vision_provider: Option<String>,
+    pub vision_model: Option<String>,
+    pub no_playwright: Option<bool>,
+    pub max_tokens: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExtractResponse {
+    pub url: String,
+    pub title: Option<String>,
+    pub content: String,
+    pub metadata: rawfy_core::types::PageMetadata,
+    pub links: Vec<LinkInfo>,
+    pub format: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LinkInfo {
+    pub label: String,
+    pub href: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+pub fn create_router() -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    Router::new()
+        .route("/health", get(health_handler))
+        .route("/version", get(version_handler))
+        .route("/fetch", get(fetch_get_handler).post(fetch_post_handler))
+        .route("/metadata", get(metadata_handler))
+        .route("/extract", post(extract_handler))
+        .layer(cors)
+}
+
+pub async fn start_api_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
+    let app = create_router();
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    println!("🚀 Rawfy API server (Rust native) running at http://localhost:{}", port);
+    println!("   GET  /fetch?url=<url>&format=markdown|json|text");
+    println!("   POST /extract  JSON: {{ url, format, vision }}");
+    println!("   GET  /metadata?url=<url>");
+    println!("   GET  /health");
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+async fn health_handler() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "status": "ok",
+        "version": VERSION,
+        "engine": "rust"
+    }))
+}
+
+async fn version_handler() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "version": VERSION,
+        "engine": "rust"
+    }))
+}
+
+async fn fetch_get_handler(Query(query): Query<FetchQuery>) -> Response {
+    let url = match query.url {
+        Some(u) if !u.is_empty() => u,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "BAD_REQUEST".to_string(),
+                    message: "Missing required query parameter: url".to_string(),
+                    url: None,
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    let format_str = query.format.as_deref().unwrap_or("markdown");
+    let format = format_str.parse::<OutputFormat>().unwrap_or_default();
+
+    let options = RawfyOptions {
+        format,
+        vision: query.vision.unwrap_or(false),
+        no_playwright: query.no_playwright.unwrap_or(false),
+        max_tokens: query.max_tokens,
+        ..Default::default()
+    };
+
+    match rawfy_core::rawfy_fetch(&url, &options).await {
+        Ok(result) => match format {
+            OutputFormat::Json => Json(result).into_response(),
+            OutputFormat::Html => Html(result.content.html).into_response(),
+            OutputFormat::Text => serialize_text(&result).into_response(),
+            OutputFormat::Markdown => serialize_wsm(&result).into_response(),
+        },
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "FETCH_FAILED".to_string(),
+                message: err.to_string(),
+                url: Some(url),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+async fn fetch_post_handler(Json(body): Json<ExtractBody>) -> Response {
+    let format_str = body.format.as_deref().unwrap_or("markdown");
+    let format = format_str.parse::<OutputFormat>().unwrap_or_default();
+
+    let options = RawfyOptions {
+        format,
+        vision: body.vision.unwrap_or(false),
+        vision_provider: body.vision_provider,
+        vision_model: body.vision_model,
+        no_playwright: body.no_playwright.unwrap_or(false),
+        max_tokens: body.max_tokens,
+        ..Default::default()
+    };
+
+    match rawfy_core::rawfy_fetch(&body.url, &options).await {
+        Ok(result) => match format {
+            OutputFormat::Json => Json(result).into_response(),
+            OutputFormat::Html => Html(result.content.html).into_response(),
+            OutputFormat::Text => serialize_text(&result).into_response(),
+            OutputFormat::Markdown => serialize_wsm(&result).into_response(),
+        },
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "FETCH_FAILED".to_string(),
+                message: err.to_string(),
+                url: Some(body.url),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+async fn metadata_handler(Query(query): Query<MetadataQuery>) -> Response {
+    let url = match query.url {
+        Some(u) if !u.is_empty() => u,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "BAD_REQUEST".to_string(),
+                    message: "Missing required query parameter: url".to_string(),
+                    url: None,
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    let options = RawfyOptions {
+        no_playwright: query.no_playwright.unwrap_or(false),
+        ..Default::default()
+    };
+
+    match rawfy_core::rawfy_metadata(&url, &options).await {
+        Ok(metadata) => Json(metadata).into_response(),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "METADATA_FAILED".to_string(),
+                message: err.to_string(),
+                url: Some(url),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+#[axum::debug_handler]
+async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
+    let format_str = body.format.as_deref().unwrap_or("markdown");
+    let format = format_str.parse::<OutputFormat>().unwrap_or_default();
+
+    let options = RawfyOptions {
+        format,
+        vision: body.vision.unwrap_or(false),
+        vision_provider: body.vision_provider,
+        vision_model: body.vision_model,
+        no_playwright: body.no_playwright.unwrap_or(false),
+        max_tokens: body.max_tokens,
+        ..Default::default()
+    };
+
+    match rawfy_core::rawfy_fetch(&body.url, &options).await {
+        Ok(result) => {
+            let content = match format {
+                OutputFormat::Json => serialize_json(&result).unwrap_or_default(),
+                OutputFormat::Html => result.content.html.clone(),
+                OutputFormat::Text => serialize_text(&result),
+                OutputFormat::Markdown => serialize_wsm(&result),
+            };
+
+            let links: Vec<LinkInfo> = result
+                .interactive_elements
+                .iter()
+                .filter(|e| e.r#type == rawfy_core::types::InteractiveElementType::Link)
+                .map(|e| LinkInfo {
+                    label: e.label.clone(),
+                    href: e.href.clone().unwrap_or_default(),
+                })
+                .collect();
+
+            Json(ExtractResponse {
+                url: result.metadata.url.clone(),
+                title: result.metadata.title.clone(),
+                content,
+                metadata: result.metadata,
+                links,
+                format: format_str.to_string(),
+            })
+            .into_response()
+        }
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "EXTRACT_FAILED".to_string(),
+                message: err.to_string(),
+                url: Some(body.url),
+            }),
+        )
+            .into_response(),
+    }
+}

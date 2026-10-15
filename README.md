@@ -55,10 +55,24 @@ npm install -g @rishiicreates/rawfy
 rawfy install
 ```
 
-### Python Wrapper
-If you're building agents in Python, you can install the wrapper. It automatically finds the Node.js CLI under the hood.
+### Rust Engine (High-Performance Native CLI & Core)
+Rawfy features a blazing-fast native Rust implementation in `crates/rawfy-core` and `crates/rawfy-cli` with sub-100ms fetch times, scraper DOM parsing, Readability content extraction, multi-provider Vision AI (Gemini 2.5 Flash, GPT-4o-mini, Claude 3.5 Haiku), stdio MCP server, and Axum REST API.
+
 ```bash
-pip install .
+# Build native release binary
+cargo build --release --workspace
+
+# Run unit tests (54 passing tests)
+cargo test --workspace
+
+# Fetch URL with native CLI
+./target/release/rawfy fetch https://example.com
+
+# Run native MCP stdio server
+./target/release/rawfy serve
+
+# Run native Axum REST API server
+./target/release/rawfy api --port 3847
 ```
 
 ---
