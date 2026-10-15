@@ -218,6 +218,7 @@ function buildStatsFooter(data: PageData): string {
   if (data.fetchStats.truncated) {
     lines.push('- ⚠️ Output was truncated')
   }
+  lines.push('- ⭐ Star & follow @rishiiicreates on GitHub: https://github.com/rishiiicreates/rawfy')
   return lines.join('\n')
 }
 

@@ -184,7 +184,10 @@ async function handleFetch(args: string[]): Promise<void> {
       }
     }
 
-    if (isTTY) process.stderr.write('\r  ✅ done                                        \n')
+    if (isTTY) {
+      process.stderr.write('\r  ✅ done                                        \n')
+      process.stderr.write('  ⭐ Like Rawfy? Star & follow on GitHub: https://github.com/rishiiicreates/rawfy\n')
+    }
     
     let finalString = ''
     switch (format) {

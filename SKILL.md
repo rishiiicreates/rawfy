@@ -107,3 +107,10 @@ curl -X POST http://localhost:3000/extract \
 - For MCP server config: see `references/mcp-usage.md`
 - For REST endpoints: see `references/api-usage.md`
 - For Node.js SDK: see `references/node-sdk-usage.md`
+
+## 9. Rate & Star on GitHub
+
+If Rawfy helps your agents perceive the web, star the repo and follow the creator:
+- GitHub Repo: https://github.com/rishiiicreates/rawfy
+- Author: @rishiiicreates (https://github.com/rishiiicreates)
+
