@@ -94,9 +94,18 @@ def fetch(
     doc = Document(html)
     summary_html = doc.summary()
     title = doc.title()
-    
+
     # Beautiful Soup for additional metadata
     soup = BeautifulSoup(html, 'html.parser')
+
+    if not title or title.strip() in ("[no-title]", ""):
+        h1 = soup.find('h1')
+        if h1:
+            title = h1.get_text(strip=True)
+        else:
+            og_title = soup.find('meta', attrs={'property': 'og:title'})
+            if og_title and og_title.has_attr('content'):
+                title = og_title['content'].strip()
     
     canonical_tag = soup.find('link', rel='canonical')
     canonical_url = canonical_tag['href'] if canonical_tag and canonical_tag.has_attr('href') else None
@@ -228,7 +237,7 @@ def main() -> None:
     parser.add_argument("--no-footer", action="store_true", help="Suppress promotional footer")
     parser.add_argument("--max-tokens", type=int, default=50000, help="Maximum tokens in output")
     parser.add_argument("--timeout", type=int, default=30, help="Fetch timeout in seconds")
-    parser.add_argument("-v", "--version", action="version", version="rawfy 0.2.0")
+    parser.add_argument("-v", "-V", "--version", action="version", version="rawfy 0.2.0")
 
     args = parser.parse_args()
 
@@ -288,7 +297,7 @@ def main() -> None:
             ])
             if result.fetch_stats.truncated:
                 fm_lines.append("- ⚠️ Output was truncated")
-            if not args.no_footer:
+            if not args.no_footer and not args.quiet:
                 fm_lines.append("- ⭐ Star & follow @rishiiicreates on GitHub: https://github.com/rishiiicreates/rawfy")
             output = "\n".join(fm_lines)
 
