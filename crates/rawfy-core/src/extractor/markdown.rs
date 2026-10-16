@@ -52,9 +52,12 @@ fn extract_attribute(attrs: &str, name: &str) -> Option<String> {
 fn preprocess_html(html: &str, base_url: &str) -> String {
     let mut result = html.to_string();
 
-    // 0. Clean MediaWiki citation tags and jump links
+    // 0. Clean MediaWiki citation tags, edit sections, and jump links
     if let Ok(re_cite) = Regex::new(r#"(?is)<sup\b[^>]*?(?:class="[^"]*reference[^"]*"|id="cite_ref[^"]*"|data-mw)[^>]*?>.*?</sup>"#) {
         result = re_cite.replace_all(&result, "").to_string();
+    }
+    if let Ok(re_edit) = Regex::new(r#"(?is)<span\b[^>]*?class="[^"]*mw-editsection[^"]*"[^>]*?>.*?</span>"#) {
+        result = re_edit.replace_all(&result, "").to_string();
     }
     if let Ok(re_jump) = Regex::new(r#"(?is)<a\b[^>]*?class="[^"]*mw-jump-link[^"]*"[^>]*?>.*?</a>"#) {
         result = re_jump.replace_all(&result, "").to_string();
@@ -177,7 +180,20 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
                 }
 
                 let alt = extract_attribute(attrs, "alt").unwrap_or_default();
-                let alt_clean = if alt.trim().is_empty() { "no description".to_string() } else { alt.trim().to_string() };
+                let alt_trimmed = alt.trim();
+                let is_placeholder = alt_trimmed.is_empty()
+                    || ["image", "photo", "picture", "img", "icon", "logo", "thumbnail", "placeholder", "untitled", "decorative"]
+                        .contains(&alt_trimmed.to_lowercase().as_str());
+                let title = extract_attribute(attrs, "title").unwrap_or_default();
+                let title_trimmed = title.trim();
+
+                let alt_clean = if !is_placeholder {
+                    alt_trimmed.to_string()
+                } else if !title_trimmed.is_empty() {
+                    title_trimmed.to_string()
+                } else {
+                    "no description".to_string()
+                };
 
                 let raw_src = extract_attribute(attrs, "src")
                     .or_else(|| extract_attribute(attrs, "data-src"))
@@ -185,7 +201,13 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
                     .unwrap_or_default();
 
                 let src_lower = raw_src.to_lowercase();
-                if src_lower.contains("spacer.gif") || src_lower.contains("1x1.gif") || src_lower.contains("pixel.png") {
+                if src_lower.contains("spacer.gif")
+                    || src_lower.contains("1x1.gif")
+                    || src_lower.contains("pixel.png")
+                    || src_lower.contains("tracking.gif")
+                    || src_lower.ends_with("/s.gif")
+                    || src_lower == "s.gif"
+                {
                     return String::new();
                 }
 
@@ -236,7 +258,48 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
 }
 
 fn postprocess_markdown(md: &str) -> String {
-    let mut text = md.to_string();
+    let mut in_code_block = false;
+    let mut lines = Vec::new();
+    let re_spaces = Regex::new(r" {2,}").unwrap();
+    let re_dashes = Regex::new(r"-{4,}").unwrap();
+    let re_prose_spaces = Regex::new(r" {4,}").unwrap();
+
+    for line in md.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_code_block = !in_code_block;
+            lines.push(line.to_string());
+            continue;
+        }
+
+        if in_code_block {
+            lines.push(line.to_string());
+        } else {
+            // Drop empty divider artifacts
+            if trimmed == "|" || trimmed == "| |" || trimmed == "||" {
+                continue;
+            }
+
+            // Outside code blocks:
+            // If the line contains table pipes, collapse runs of 2+ spaces so html2md column-padding
+            // does not explode into tens of thousands of spaces per line.
+            let cleaned = if line.contains('|') {
+                let compacted = re_spaces.replace_all(line, " ").to_string();
+                re_dashes.replace_all(&compacted, "---").to_string()
+            } else {
+                re_prose_spaces.replace_all(line, " ").to_string()
+            };
+
+            lines.push(cleaned);
+        }
+    }
+
+    let mut text = lines.join("\n");
+
+    // Clean Wikipedia edit links like "## Heading [edit](...)" or "[edit]" in headings
+    if let Ok(re_heading_edit) = Regex::new(r#"(?m)^(#{1,6}\s+.*?)\s*\[\s*(?:edit|Edit)\s*\](?:\([^)]*\))?"#) {
+        text = re_heading_edit.replace_all(&text, "$1").to_string();
+    }
 
     // Ensure space between alphanumeric char and markdown link (e.g. "see[link]" -> "see [link]")
     if let Ok(re_link_space) = Regex::new(r"([a-zA-Z0-9])(\[[^\]\n]+\]\([^\)\n]+\))") {

@@ -3,7 +3,7 @@ mod mcp;
 
 use clap::{Parser, Subcommand};
 use rawfy_core::{
-    output::{serialize_json, serialize_text, serialize_wsm},
+    output::{serialize_json, serialize_text, serialize_wsm_custom},
     types::{OutputFormat, RawfyOptions},
 };
 use std::io::{self, Read, Write};
@@ -69,6 +69,10 @@ struct Cli {
     /// Suppress progress spinner and notices
     #[arg(short = 'q', long, global = true)]
     quiet: bool,
+
+    /// Suppress promotional footer and star link
+    #[arg(long, global = true)]
+    no_footer: bool,
 }
 
 #[derive(Subcommand)]
@@ -215,7 +219,7 @@ async fn handle_fetch(url: String, cli: &Cli) -> Result<(), Box<dyn std::error::
                 OutputFormat::Json => serialize_json(&data)?,
                 OutputFormat::Html => data.content.html,
                 OutputFormat::Text => serialize_text(&data),
-                OutputFormat::Markdown => serialize_wsm(&data),
+                OutputFormat::Markdown => serialize_wsm_custom(&data, cli.no_footer || cli.quiet),
             };
 
             if let Some(ref path) = cli.out {
@@ -236,7 +240,7 @@ async fn handle_fetch(url: String, cli: &Cli) -> Result<(), Box<dyn std::error::
                 println!("{}", output);
             }
 
-            if show_progress {
+            if show_progress && !cli.no_footer {
                 eprintln!("\n⭐ If you like Rawfy, please star the repo on GitHub: https://github.com/rishiiicreates/rawfy");
             }
         }

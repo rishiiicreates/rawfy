@@ -22,5 +22,5 @@ Usage:
 
 from rawfy.client import fetch, metadata, RawfyError
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["fetch", "metadata", "RawfyError", "__version__"]

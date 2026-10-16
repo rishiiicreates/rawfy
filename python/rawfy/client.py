@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -170,17 +173,42 @@ def metadata(url: str, **kwargs) -> dict[str, Any]:
     return page_data.metadata.model_dump()
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python -m rawfy <url> [--format markdown|json|text|html]")
-        sys.exit(1)
-    
+    # 1. Version flag
+    if len(sys.argv) == 2 and sys.argv[1] in ("-v", "--version", "version"):
+        print("rawfy 0.2.0")
+        sys.exit(0)
+
+    # 2. Help flag
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+        print("Usage: rawfy <url> [-f markdown|json|text|html] [-q] [-o file]")
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
+
+    # 3. If native rawfy rust binary is present, delegate directly to it!
+    native_bin = shutil.which("rawfy")
+    if not native_bin:
+        candidate = os.path.expanduser("~/rawfy/target/release/rawfy")
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            native_bin = candidate
+
+    if native_bin and os.path.realpath(native_bin) != os.path.realpath(sys.argv[0]):
+        try:
+            res = subprocess.run([native_bin] + sys.argv[1:])
+            sys.exit(res.returncode)
+        except Exception:
+            pass
+
+    # 4. Fallback to pure Python engine
     url = sys.argv[1]
     fmt: OutputFormat = "markdown"
     if "--format" in sys.argv:
         idx = sys.argv.index("--format")
         if idx + 1 < len(sys.argv):
             fmt = sys.argv[idx + 1]  # type: ignore
-            
+    elif "-f" in sys.argv:
+        idx = sys.argv.index("-f")
+        if idx + 1 < len(sys.argv):
+            fmt = sys.argv[idx + 1]  # type: ignore
+
     try:
         result = fetch(url, format=fmt)
         if fmt == "json":

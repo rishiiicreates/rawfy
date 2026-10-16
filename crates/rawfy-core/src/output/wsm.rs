@@ -2,6 +2,11 @@ use crate::types::{InteractiveElement, InteractiveElementType, MediaResult, Page
 
 /// Serialize PageData into WSM (Web Semantic Markdown) format.
 pub fn serialize_wsm(data: &PageData) -> String {
+    serialize_wsm_custom(data, false)
+}
+
+/// Serialize PageData into WSM format with optional promotional footer suppression.
+pub fn serialize_wsm_custom(data: &PageData, no_footer: bool) -> String {
     let mut parts = Vec::new();
 
     // 1. YAML Frontmatter
@@ -21,7 +26,7 @@ pub fn serialize_wsm(data: &PageData) -> String {
     }
 
     // 5. Fetch Stats Footer
-    parts.push(build_stats_footer(data));
+    parts.push(build_stats_footer(data, no_footer));
 
     parts.join("\n\n")
 }
@@ -168,7 +173,7 @@ fn build_interactive_section(elements: &[InteractiveElement]) -> String {
     lines.join("\n")
 }
 
-fn build_stats_footer(data: &PageData) -> String {
+fn build_stats_footer(data: &PageData, no_footer: bool) -> String {
     let mut lines = vec!["---".to_string(), "_Rawfy fetch stats:_".to_string()];
     lines.push(format!("- Method: {:?}", data.fetch_stats.method).to_lowercase());
     lines.push(format!("- Duration: {}ms", data.fetch_stats.duration_ms));
@@ -179,7 +184,9 @@ fn build_stats_footer(data: &PageData) -> String {
     if data.fetch_stats.truncated {
         lines.push("- ⚠️ Output was truncated".to_string());
     }
-    lines.push("- ⭐ Star & follow @rishiiicreates on GitHub: https://github.com/rishiiicreates/rawfy".to_string());
+    if !no_footer {
+        lines.push("- ⭐ Star & follow @rishiiicreates on GitHub: https://github.com/rishiiicreates/rawfy".to_string());
+    }
     lines.join("\n")
 }
 

@@ -223,6 +223,23 @@ fn parse_dimension(val: &str) -> Option<u32> {
 }
 
 fn is_tracking_pixel(img: &ElementRef) -> bool {
+    let raw_src = img
+        .value()
+        .attr("src")
+        .or_else(|| img.value().attr("data-src"))
+        .or_else(|| img.value().attr("data-lazy-src"))
+        .unwrap_or("");
+    let src_lower = raw_src.to_lowercase();
+    if src_lower.contains("spacer.gif")
+        || src_lower.contains("1x1.gif")
+        || src_lower.contains("pixel.png")
+        || src_lower.contains("tracking.gif")
+        || src_lower.ends_with("/s.gif")
+        || src_lower == "s.gif"
+    {
+        return true;
+    }
+
     if let Some(w_str) = img.value().attr("width") {
         if let Some(w) = parse_dimension(w_str) {
             if w > 0 && w < 3 {

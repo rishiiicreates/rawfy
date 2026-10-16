@@ -37,8 +37,19 @@ pub struct MetadataBody {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ExtractBody {
+pub struct FetchBody {
     pub url: String,
+    pub format: Option<String>,
+    pub vision: Option<bool>,
+    pub vision_provider: Option<String>,
+    pub vision_model: Option<String>,
+    pub no_playwright: Option<bool>,
+    pub max_tokens: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExtractBody {
+    pub url: Option<String>,
     pub html: Option<String>,
     pub format: Option<String>,
     pub vision: Option<bool>,
@@ -198,7 +209,7 @@ async fn fetch_get_handler(Query(query): Query<FetchQuery>) -> Response {
     }
 }
 
-async fn fetch_post_handler(Json(body): Json<ExtractBody>) -> Response {
+async fn fetch_post_handler(Json(body): Json<FetchBody>) -> Response {
     let format_str = body.format.as_deref().unwrap_or("markdown");
     let format = format_str.parse::<OutputFormat>().unwrap_or_default();
 
@@ -309,7 +320,8 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
 
     // If caller passed raw html, extract directly from it offline
     if let Some(ref raw_html) = body.html {
-        match rawfy_core::rawfy_extract(raw_html, &body.url, &options) {
+        let target_url = body.url.as_deref().unwrap_or("https://example.com");
+        match rawfy_core::rawfy_extract(raw_html, target_url, &options) {
             Ok(result) => {
                 let content = match format {
                     OutputFormat::Json => serialize_json(&result).unwrap_or_default(),
@@ -345,11 +357,26 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
                 )
                 .into_response();
             }
-            Err(err) => return error_to_response(err, "EXTRACT_FAILED", Some(body.url)),
+            Err(err) => return error_to_response(err, "EXTRACT_FAILED", body.url),
         }
     }
 
-    match rawfy_core::rawfy_fetch(&body.url, &options).await {
+    let url = match body.url {
+        Some(ref u) if !u.trim().is_empty() => u.clone(),
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "BAD_REQUEST".to_string(),
+                    message: "Either 'html' or 'url' must be provided".to_string(),
+                    url: None,
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    match rawfy_core::rawfy_fetch(&url, &options).await {
         Ok(result) => {
             let duration_str = result.fetch_stats.duration_ms.to_string();
             let content = match format {
@@ -386,6 +413,6 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
             )
             .into_response()
         }
-        Err(err) => error_to_response(err, "EXTRACT_FAILED", Some(body.url)),
+        Err(err) => error_to_response(err, "EXTRACT_FAILED", Some(url)),
     }
 }
