@@ -25,5 +25,6 @@ build/
 
 # Rust
 target/
+release_dist/
 
 
