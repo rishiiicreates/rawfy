@@ -16,7 +16,7 @@ pub use media::{
     extract_audio, extract_images, extract_pdfs, extract_videos, format_audio, format_image,
     format_media, format_pdf, format_video, ImageExtractOptions, PdfExtractOptions, VideoCaptionTrack,
 };
-pub use output::{serialize_json, serialize_text, serialize_wsm, serialize_wsm_custom};
+pub use output::{serialize_json, serialize_text, serialize_wsm, serialize_wsm_custom, serialize_wsm_options};
 pub use truncate::{estimate_tokens, truncate};
 pub use types::*;
 

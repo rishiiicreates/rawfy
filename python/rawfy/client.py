@@ -14,12 +14,13 @@ from readability import Document
 import markdownify
 
 class RawfyError(Exception):
-    def __init__(self, message: str, code: str | None = None, url: str | None = None):
+    def __init__(self, message: str, code: str | None = None, url: str | None = None, status_code: int | None = None):
         self.code = code
         self.url = url
+        self.status_code = status_code
         super().__init__(message)
     def __repr__(self) -> str:
-        return f"RawfyError({self.args[0]!r}, code={self.code!r}, url={self.url!r})"
+        return f"RawfyError({self.args[0]!r}, code={self.code!r}, url={self.url!r}, status_code={self.status_code!r})"
 
 class OpenGraphData(BaseModel):
     title: Optional[str] = None
@@ -84,6 +85,9 @@ def fetch(
         resp.raise_for_status()
     except httpx.TimeoutException:
         raise RawfyError("Fetch timed out", code="FETCH_TIMEOUT", url=url)
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        raise RawfyError(f"HTTP {status} error: {str(e)}", code=f"HTTP_{status}", url=url, status_code=status)
     except Exception as e:
         raise RawfyError(f"Fetch failed: {str(e)}", code="FETCH_FAILED", url=url)
         
@@ -188,9 +192,40 @@ def fetch_json(url: str, **kwargs) -> dict[str, Any]:
     page_data = fetch(url, **kwargs)
     return page_data.model_dump()
 
-def metadata(url: str, **kwargs) -> dict[str, Any]:
+def metadata(url: str, **kwargs) -> PageMetadata:
     page_data = fetch(url, **kwargs)
-    return page_data.metadata.model_dump()
+    return page_data.metadata
+
+def check_installation() -> dict[str, Any]:
+    """Check if the native Rust binary is available on the system."""
+    candidates = [
+        os.environ.get("RAWFY_NATIVE_BIN"),
+        os.path.expanduser("~/rawfy/target/release/rawfy"),
+        os.path.expanduser("~/.cargo/bin/rawfy"),
+    ]
+    native_bin = None
+    for cand in candidates:
+        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+            native_bin = cand
+            break
+
+    if not native_bin:
+        which_bin = shutil.which("rawfy")
+        if which_bin and os.path.realpath(which_bin) != os.path.realpath(sys.argv[0]):
+            try:
+                with open(which_bin, "rb") as f:
+                    header = f.read(4)
+                    if header in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\x7fELF", b"MZ"):
+                        native_bin = which_bin
+            except Exception:
+                pass
+
+    return {
+        "native_binary_available": native_bin is not None,
+        "native_binary_path": native_bin,
+        "engine": "rust" if native_bin is not None else "python",
+        "version": "0.2.0",
+    }
 
 def main() -> None:
     # 1. Native Rust binary check: unless RAWFY_FORCE_PYTHON is set

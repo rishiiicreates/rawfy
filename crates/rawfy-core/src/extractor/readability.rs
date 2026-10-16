@@ -47,6 +47,23 @@ pub fn extract_readability(html: &str, url: &str) -> ReadabilityResult {
             return extract_body_fallback(&preprocessed_html, url);
         }
 
+        // Wikipedia / MediaWiki article truncation heuristic:
+        // Readability crate often scores a single subsection div highest on Wikipedia/MediaWiki articles,
+        // prematurely cutting off later sections (e.g. Formal analysis, Variants, etc.).
+        if preprocessed_html.contains("mw-parser-output") {
+            if let Ok(sel) = Selector::parse(".mw-parser-output") {
+                let doc = Html::parse_document(&preprocessed_html);
+                if let Some(mw_content) = doc.select(&sel).next() {
+                    let mw_text = mw_content.text().collect::<String>();
+                    let mw_words = mw_text.split_whitespace().count();
+                    // If Readability dropped more than 35% of the article body from mw-parser-output
+                    if mw_words > 1000 && word_count < (mw_words * 65 / 100) {
+                        return extract_body_fallback(&preprocessed_html, url);
+                    }
+                }
+            }
+        }
+
         let (site_name, byline, excerpt) = extract_meta_enrichments(html);
         let title = if product.title.trim().is_empty() {
             extract_title_fallback(html)
@@ -193,7 +210,7 @@ pub fn extract_body_fallback(html: &str, _url: &str) -> ReadabilityResult {
     let title = extract_title_fallback(html);
     let (site_name, byline, excerpt) = extract_meta_enrichments(html);
 
-    let target_node = if let Ok(sel) = Selector::parse("main, article, [role=\"main\"], .main-content, #main-content, #content, .content") {
+    let target_node = if let Ok(sel) = Selector::parse(".mw-parser-output, #mw-content-text, main, article, [role=\"main\"], .main-content, #main-content, #content, .content") {
         document.select(&sel).next()
     } else {
         None
@@ -323,7 +340,7 @@ fn strip_non_content_tags(html: &str) -> String {
     }
 
     // Strip Wikipedia portlet language and navigation bars
-    if let Ok(re_nav_divs) = Regex::new(r#"(?is)<(?:div|nav)\b[^>]*?(?:class="[^"]*(?:vector-header|vector-page-toolbar|vector-menu|mw-portlet-lang|sidebar|navbox)[^"]*"|id="(?:p-lang|mw-navigation|p-personal)")[^>]*?>.*?</(?:div|nav)>"#) {
+    if let Ok(re_nav_divs) = Regex::new(r#"(?is)<(?:div|nav)\b[^>]*?(?:class="[^"]*(?:vector-header|vector-page-toolbar|vector-menu|mw-portlet-lang|sidebar|navbox|mw-references-wrap|reflist)[^"]*"|id="(?:p-lang|mw-navigation|p-personal|toc|mw-toc)")[^>]*?>.*?</(?:div|nav)>"#) {
         cleaned = re_nav_divs.replace_all(&cleaned, "").to_string();
     }
 
@@ -451,5 +468,35 @@ mod tests {
         let res = extract_readability(html, "https://example.com/math");
         let md = crate::extractor::markdown::html_to_markdown(&res.content, "https://example.com/math");
         assert!(md.contains("$O(n^{2})$"));
+    }
+
+    #[test]
+    fn test_mediawiki_truncation_fallback() {
+        let paragraphs = (0..50)
+            .map(|i| format!("<p>Paragraph number {} with extensive text discussion explaining deep concepts and background details in algorithm analysis.</p>", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let html = format!(r##"
+            <!DOCTYPE html>
+            <html><body>
+                <div id="content" class="mw-body">
+                    <div id="mw-content-text">
+                        <div class="mw-parser-output">
+                            <h2>First Section</h2>
+                            <p>Introductory overview</p>
+                            <h2>Second Section</h2>
+                            {}
+                            <h2>Formal Analysis Section</h2>
+                            <p>Detailed math and proofs that must not be truncated.</p>
+                        </div>
+                    </div>
+                </div>
+            </body></html>
+        "##, paragraphs);
+
+        let res = extract_readability(&html, "https://en.wikipedia.org/wiki/Algorithm");
+        assert!(res.content.contains("Formal Analysis Section"), "Expected Formal Analysis Section in output");
+        assert!(res.content.contains("Detailed math and proofs that must not be truncated."));
     }
 }

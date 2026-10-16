@@ -1,5 +1,5 @@
 use rawfy_core::{
-    output::{serialize_json, serialize_text, serialize_wsm},
+    output::{serialize_json, serialize_text, serialize_wsm_options},
     types::{OutputFormat, RawfyOptions},
 };
 use serde::Serialize;
@@ -163,6 +163,16 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                                     "type": "integer",
                                     "default": 50000,
                                     "description": "Maximum output tokens (default: 50000)"
+                                },
+                                "no_footer": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "description": "Omit promotional footer and star link"
+                                },
+                                "no_stats": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "description": "Omit fetch stats block in markdown output"
                                 }
                             },
                             "required": ["url"]
@@ -207,6 +217,16 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                                     "enum": ["markdown", "json", "text", "html"],
                                     "default": "markdown",
                                     "description": "Output format: markdown (default), json, text, or html"
+                                },
+                                "no_footer": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "description": "Omit promotional footer and star link"
+                                },
+                                "no_stats": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "description": "Omit fetch stats block in markdown output"
                                 }
                             },
                             "required": ["html"]
@@ -252,6 +272,9 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                         }
                     });
 
+                    let no_footer = arguments.get("no_footer").and_then(|f| f.as_bool()).unwrap_or(false);
+                    let no_stats = arguments.get("no_stats").and_then(|f| f.as_bool()).unwrap_or(false);
+
                     let options = RawfyOptions {
                         format,
                         vision,
@@ -266,7 +289,7 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                                 OutputFormat::Json => serialize_json(&data).unwrap_or_default(),
                                 OutputFormat::Html => data.content.html.clone(),
                                 OutputFormat::Text => serialize_text(&data),
-                                OutputFormat::Markdown => serialize_wsm(&data),
+                                OutputFormat::Markdown => serialize_wsm_options(&data, no_footer, no_stats),
                             };
                             JsonRpcResponse {
                                 jsonrpc: "2.0".to_string(),
@@ -348,6 +371,9 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                     let url = arguments.get("url").and_then(|u| u.as_str()).unwrap_or("https://example.com");
                     let format_str = arguments.get("format").and_then(|f| f.as_str()).unwrap_or("markdown");
                     let format = format_str.parse::<OutputFormat>().unwrap_or_default();
+                    let no_footer = arguments.get("no_footer").and_then(|f| f.as_bool()).unwrap_or(false);
+                    let no_stats = arguments.get("no_stats").and_then(|f| f.as_bool()).unwrap_or(false);
+
                     let options = RawfyOptions {
                         format,
                         ..Default::default()
@@ -359,7 +385,7 @@ async fn handle_request(method: &str, params: Option<&Value>, id: Value) -> Json
                                 OutputFormat::Json => serialize_json(&data).unwrap_or_default(),
                                 OutputFormat::Html => data.content.html.clone(),
                                 OutputFormat::Text => serialize_text(&data),
-                                OutputFormat::Markdown => serialize_wsm(&data),
+                                OutputFormat::Markdown => serialize_wsm_options(&data, no_footer, no_stats),
                             };
                             JsonRpcResponse {
                                 jsonrpc: "2.0".to_string(),

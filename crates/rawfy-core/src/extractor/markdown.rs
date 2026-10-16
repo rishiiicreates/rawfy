@@ -285,6 +285,9 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
                     || src_lower.contains("mw-logo")
                     || src_lower.contains("y18.svg")
                     || src_lower.contains("avatar")
+                    || src_lower.contains("media/math/render")
+                    || alt_trimmed.starts_with("{\\displaystyle")
+                    || alt_trimmed.starts_with("\\displaystyle")
                 {
                     return String::new();
                 }

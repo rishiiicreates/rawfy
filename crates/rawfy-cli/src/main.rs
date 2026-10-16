@@ -3,7 +3,7 @@ mod mcp;
 
 use clap::{Parser, Subcommand};
 use rawfy_core::{
-    output::{serialize_json, serialize_text, serialize_wsm_custom},
+    output::{serialize_json, serialize_text, serialize_wsm_options},
     types::{OutputFormat, RawfyOptions},
 };
 use std::io::{self, Read, Write};
@@ -73,6 +73,10 @@ struct Cli {
     /// Suppress promotional footer and star link
     #[arg(long, global = true)]
     no_footer: bool,
+
+    /// Suppress fetch stats block in markdown output
+    #[arg(long, global = true)]
+    no_stats: bool,
 }
 
 #[derive(Subcommand)]
@@ -219,7 +223,7 @@ async fn handle_fetch(url: String, cli: &Cli) -> Result<(), Box<dyn std::error::
                 OutputFormat::Json => serialize_json(&data)?,
                 OutputFormat::Html => data.content.html,
                 OutputFormat::Text => serialize_text(&data),
-                OutputFormat::Markdown => serialize_wsm_custom(&data, cli.no_footer || cli.quiet),
+                OutputFormat::Markdown => serialize_wsm_options(&data, cli.no_footer || cli.quiet, cli.no_stats),
             };
 
             if let Some(ref path) = cli.out {

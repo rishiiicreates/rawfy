@@ -99,7 +99,7 @@ pub fn create_router() -> Router {
         .layer(cors)
 }
 
-fn error_to_response(err: rawfy_core::types::RawfyError, default_code: &str, url: Option<String>) -> Response {
+fn error_to_response(err: rawfy_core::types::RawfyError, default_code: &str, url: Option<String>, elapsed_ms: u128) -> Response {
     let status = match &err {
         rawfy_core::types::RawfyError::InvalidUrl { .. } => StatusCode::BAD_REQUEST,
         rawfy_core::types::RawfyError::FetchTimeout { .. } => StatusCode::GATEWAY_TIMEOUT,
@@ -115,7 +115,7 @@ fn error_to_response(err: rawfy_core::types::RawfyError, default_code: &str, url
 
     (
         status,
-        [(axum::http::HeaderName::from_static("x-response-time-ms"), "0".to_string())],
+        [(axum::http::HeaderName::from_static("x-response-time-ms"), elapsed_ms.to_string())],
         Json(ErrorResponse {
             error: default_code.to_string(),
             message: err.to_string(),
@@ -155,6 +155,7 @@ async fn version_handler() -> impl IntoResponse {
 }
 
 async fn fetch_get_handler(Query(query): Query<FetchQuery>) -> Response {
+    let start_time = std::time::Instant::now();
     let url = match query.url {
         Some(u) if !u.is_empty() => u,
         _ => {
@@ -206,11 +207,12 @@ async fn fetch_get_handler(Query(query): Query<FetchQuery>) -> Response {
                 ).into_response(),
             }
         }
-        Err(err) => error_to_response(err, "FETCH_FAILED", Some(url)),
+        Err(err) => error_to_response(err, "FETCH_FAILED", Some(url), start_time.elapsed().as_millis()),
     }
 }
 
 async fn fetch_post_handler(Json(body): Json<FetchBody>) -> Response {
+    let start_time = std::time::Instant::now();
     let format_str = body.format.as_deref().unwrap_or("markdown");
     let format = format_str.parse::<OutputFormat>().unwrap_or_default();
 
@@ -249,7 +251,7 @@ async fn fetch_post_handler(Json(body): Json<FetchBody>) -> Response {
                 ).into_response(),
             }
         }
-        Err(err) => error_to_response(err, "FETCH_FAILED", Some(body.url)),
+        Err(err) => error_to_response(err, "FETCH_FAILED", Some(body.url), start_time.elapsed().as_millis()),
     }
 }
 
@@ -280,7 +282,7 @@ async fn metadata_handler(Query(query): Query<MetadataQuery>) -> Response {
             [(axum::http::HeaderName::from_static("x-response-time-ms"), start_time.elapsed().as_millis().to_string())],
             Json(metadata),
         ).into_response(),
-        Err(err) => error_to_response(err, "METADATA_FAILED", Some(url)),
+        Err(err) => error_to_response(err, "METADATA_FAILED", Some(url), start_time.elapsed().as_millis()),
     }
 }
 
@@ -308,7 +310,7 @@ async fn metadata_post_handler(Json(body): Json<MetadataBody>) -> Response {
             [(axum::http::HeaderName::from_static("x-response-time-ms"), start_time.elapsed().as_millis().to_string())],
             Json(metadata),
         ).into_response(),
-        Err(err) => error_to_response(err, "METADATA_FAILED", Some(body.url)),
+        Err(err) => error_to_response(err, "METADATA_FAILED", Some(body.url), start_time.elapsed().as_millis()),
     }
 }
 
@@ -367,7 +369,7 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
                 )
                 .into_response();
             }
-            Err(err) => return error_to_response(err, "EXTRACT_FAILED", body.url),
+            Err(err) => return error_to_response(err, "EXTRACT_FAILED", body.url, start_time.elapsed().as_millis()),
         }
     }
 
@@ -423,6 +425,6 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
             )
             .into_response()
         }
-        Err(err) => error_to_response(err, "EXTRACT_FAILED", Some(url)),
+        Err(err) => error_to_response(err, "EXTRACT_FAILED", Some(url), start_time.elapsed().as_millis()),
     }
 }
