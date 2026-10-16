@@ -62,6 +62,9 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
     if let Ok(re_jump) = Regex::new(r#"(?is)<a\b[^>]*?class="[^"]*mw-jump-link[^"]*"[^>]*?>.*?</a>"#) {
         result = re_jump.replace_all(&result, "").to_string();
     }
+    if let Ok(re_hlink) = Regex::new(r#"(?is)<a\b[^>]*?class=["'][^"']*(?:headerlink|anchor)[^"']*["'][^>]*>.*?</a>"#) {
+        result = re_hlink.replace_all(&result, "").to_string();
+    }
 
     // 0a. Transform GitHub/Git diff tables into clean diff code blocks
     if let Ok(re_diff_table) = Regex::new(r#"(?is)<table\b[^>]*?(?:data-diff-anchor|aria-label=["']Diff for|class=["'][^"']*(?:diff-table|js-diff-table|tab-size)[^"']*)[^>]*>(.*?)</table>"#) {
@@ -569,5 +572,18 @@ mod tests {
         assert!(!md.contains("[1]"));
         assert!(md.contains("**Ownership**: Each value in Rust has an owner."));
         assert!(md.contains("**Borrowing**: References can be shared or mutable."));
+    }
+
+    #[test]
+    fn test_sphinx_code_block() {
+        let html = r#"
+            <div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;hello&#39;</span><span class="p">)</span>
+</pre></div></div>
+        "#;
+        let md = html_to_markdown(html, "https://example.com");
+        println!("=== MD OUTPUT ===\n{}\n================", md);
+        assert!(md.contains("async def main():"), "Got md:\n{}", md);
     }
 }

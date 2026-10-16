@@ -115,6 +115,7 @@ fn error_to_response(err: rawfy_core::types::RawfyError, default_code: &str, url
 
     (
         status,
+        [(axum::http::HeaderName::from_static("x-response-time-ms"), "0".to_string())],
         Json(ErrorResponse {
             error: default_code.to_string(),
             message: err.to_string(),
@@ -313,6 +314,7 @@ async fn metadata_post_handler(Json(body): Json<MetadataBody>) -> Response {
 
 #[axum::debug_handler]
 async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
+    let start_time = std::time::Instant::now();
     let format_str = body.format.as_deref().unwrap_or("markdown");
     let format = format_str.parse::<OutputFormat>().unwrap_or_default();
 
@@ -351,7 +353,7 @@ async fn extract_handler(Json(body): Json<ExtractBody>) -> Response {
                 return (
                     [(
                         axum::http::HeaderName::from_static("x-response-time-ms"),
-                        "0".to_string(),
+                        start_time.elapsed().as_millis().to_string(),
                     )],
                     Json(ExtractResponse {
                         url: result.metadata.url.clone(),

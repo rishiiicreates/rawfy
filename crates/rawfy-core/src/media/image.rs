@@ -244,6 +244,10 @@ fn is_tracking_pixel(img: &ElementRef) -> bool {
         || src_lower.contains("mw-logo")
         || src_lower.contains("y18.svg")
         || src_lower.contains("avatar")
+        || src_lower.contains("media/math/render")
+        || src_lower.contains("math/render/svg")
+        || src_lower.contains("latex.codecogs.com")
+        || img.value().classes().any(|c| c.contains("mwe-math"))
     {
         return true;
     }
