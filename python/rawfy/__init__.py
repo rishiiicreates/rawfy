@@ -20,7 +20,30 @@ Usage:
     meta = metadata("https://example.com")
 """
 
-from rawfy.client import fetch, fetch_json, metadata, RawfyError
+from rawfy.client import (
+    fetch,
+    fetch_json,
+    metadata,
+    RawfyError,
+    PageData,
+    PageMetadata,
+    PageContent,
+    FetchStats,
+    OpenGraphData,
+    OutputFormat,
+)
 
 __version__ = "0.2.0"
-__all__ = ["fetch", "fetch_json", "metadata", "RawfyError", "__version__"]
+__all__ = [
+    "fetch",
+    "fetch_json",
+    "metadata",
+    "RawfyError",
+    "PageData",
+    "PageMetadata",
+    "PageContent",
+    "FetchStats",
+    "OpenGraphData",
+    "OutputFormat",
+    "__version__",
+]
