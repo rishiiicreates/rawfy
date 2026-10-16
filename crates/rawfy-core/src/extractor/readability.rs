@@ -29,6 +29,11 @@ pub fn extract_readability(html: &str, url: &str) -> ReadabilityResult {
             return extract_body_fallback(html, url);
         }
 
+        // Suspiciously small output (< 35 words) on discussion pages or pages with content (>8KB)
+        if word_count < 35 && (html.len() > 8_000 || html.contains("class=\"comment\"") || html.contains("class=\"commtext\"") || html.contains("id=\"hnmain\"")) {
+            return extract_body_fallback(html, url);
+        }
+
         // Suspiciously small output on large documents (>50KB)
         if word_count < 100 && html.len() > 50_000 {
             return extract_body_fallback(html, url);

@@ -56,12 +56,15 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
     if let Ok(re_cite) = Regex::new(r#"(?is)<sup\b[^>]*?(?:class="[^"]*reference[^"]*"|id="cite_ref[^"]*"|data-mw)[^>]*?>.*?</sup>"#) {
         result = re_cite.replace_all(&result, "").to_string();
     }
-    if let Ok(re_edit) = Regex::new(r#"(?is)<span\b[^>]*?class="[^"]*mw-editsection[^"]*"[^>]*?>.*?</span>"#) {
+    if let Ok(re_edit) = Regex::new(r#"(?is)<span\b[^>]*?class="[^"]*mw-editsection[^"]*"[\s\S]*?</span>\s*</span>"#) {
         result = re_edit.replace_all(&result, "").to_string();
     }
     if let Ok(re_jump) = Regex::new(r#"(?is)<a\b[^>]*?class="[^"]*mw-jump-link[^"]*"[^>]*?>.*?</a>"#) {
         result = re_jump.replace_all(&result, "").to_string();
     }
+
+    // 0b. Pre-flatten nested and layout tables so html2md does not explode memory on comment trees
+    result = flatten_layout_tables(&result);
 
     // 1. Transform <details><summary>Summary</summary>Body</details>
     if let Ok(re_details) = Regex::new(r"(?is)<details\b[^>]*>\s*<summary\b[^>]*>(.*?)</summary>(.*?)</details>") {
@@ -257,6 +260,69 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
     result
 }
 
+fn flatten_layout_tables(html: &str) -> String {
+    if !html.contains("<table") && !html.contains("<TABLE") {
+        return html.to_string();
+    }
+
+    let mut current = html.to_string();
+
+    // 1. Unwrap tables explicitly marked as presentation or comment layout
+    if let Ok(re_pres) = Regex::new(r#"(?is)<table\b[^>]*?(?:role=["'](?:presentation|none)["']|class=["'][^"']*(?:comment-tree|fatitem|subtext|itemlist|athing)[^"']*")[^>]*>(.*?)</table>"#) {
+        let mut passes = 0;
+        while re_pres.is_match(&current) && passes < 10 {
+            passes += 1;
+            current = re_pres.replace_all(&current, |caps: &Captures| {
+                unwrap_table_tags(&caps[1])
+            }).to_string();
+        }
+    }
+
+    // 2. Unwrap any table that contains another <table inside it or has no <th> / <thead> / class="wikitable"
+    if let Ok(re_nested) = Regex::new(r"(?is)<table\b[^>]*>(.*?)</table>") {
+        let mut changed = true;
+        let mut loop_count = 0;
+        while changed && loop_count < 10 {
+            changed = false;
+            loop_count += 1;
+            current = re_nested.replace_all(&current, |caps: &Captures| {
+                let inner = &caps[1];
+                let is_nested = inner.contains("<table") || inner.contains("<TABLE");
+                let has_headers = inner.contains("<th") || inner.contains("<TH") || inner.contains("<thead") || inner.contains("<THEAD") || inner.contains("wikitable");
+
+                if is_nested || !has_headers {
+                    changed = true;
+                    unwrap_table_tags(inner)
+                } else {
+                    caps[0].to_string()
+                }
+            }).to_string();
+        }
+    }
+
+    current
+}
+
+fn unwrap_table_tags(content: &str) -> String {
+    let mut s = content.to_string();
+    if let Ok(re_tr) = Regex::new(r"(?is)<tr\b[^>]*>") {
+        s = re_tr.replace_all(&s, "<div>").to_string();
+    }
+    s = s.replace("</tr>", "</div>");
+    s = s.replace("</TR>", "</div>");
+
+    if let Ok(re_td) = Regex::new(r"(?is)<td\b[^>]*>") {
+        s = re_td.replace_all(&s, "<div>").to_string();
+    }
+    s = s.replace("</td>", "</div>");
+    s = s.replace("</TD>", "</div>");
+
+    if let Ok(re_body) = Regex::new(r"(?is)</?(?:tbody|thead|tfoot)\b[^>]*>") {
+        s = re_body.replace_all(&s, "").to_string();
+    }
+    format!("<div>{}</div>", s)
+}
+
 fn postprocess_markdown(md: &str) -> String {
     let mut in_code_block = false;
     let mut lines = Vec::new();
@@ -286,6 +352,8 @@ fn postprocess_markdown(md: &str) -> String {
             let cleaned = if line.contains('|') {
                 let compacted = re_spaces.replace_all(line, " ").to_string();
                 re_dashes.replace_all(&compacted, "---").to_string()
+            } else if line.len() > 4000 {
+                line.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
             } else {
                 re_prose_spaces.replace_all(line, " ").to_string()
             };
@@ -299,6 +367,11 @@ fn postprocess_markdown(md: &str) -> String {
     // Clean Wikipedia edit links like "## Heading [edit](...)" or "[edit]" in headings
     if let Ok(re_heading_edit) = Regex::new(r#"(?m)^(#{1,6}\s+.*?)\s*\[\s*(?:edit|Edit)\s*\](?:\([^)]*\))?"#) {
         text = re_heading_edit.replace_all(&text, "$1").to_string();
+    }
+
+    // Clean standalone [edit] or [edit](url) lines below Setext headings
+    if let Ok(re_edit_line) = Regex::new(r#"(?m)^\s*\[\s*(?:edit|Edit)\s*\](?:\([^)]*\))?\s*$\n?"#) {
+        text = re_edit_line.replace_all(&text, "").to_string();
     }
 
     // Ensure space between alphanumeric char and markdown link (e.g. "see[link]" -> "see [link]")
