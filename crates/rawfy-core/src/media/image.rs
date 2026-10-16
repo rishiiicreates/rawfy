@@ -239,6 +239,9 @@ fn is_tracking_pixel(img: &ElementRef) -> bool {
         || src_lower.contains("enwiki-25")
         || src_lower.contains("mediawiki_compact")
         || src_lower.contains("wikimedia.svg")
+        || src_lower.contains("wikipedia-wordmark")
+        || src_lower.contains("wikipedia-tagline")
+        || src_lower.contains("mw-logo")
         || src_lower.contains("y18.svg")
         || src_lower.contains("avatar")
     {

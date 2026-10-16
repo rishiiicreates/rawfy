@@ -277,6 +277,9 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
                     || src_lower.contains("enwiki-25")
                     || src_lower.contains("mediawiki_compact")
                     || src_lower.contains("wikimedia.svg")
+                    || src_lower.contains("wikipedia-wordmark")
+                    || src_lower.contains("wikipedia-tagline")
+                    || src_lower.contains("mw-logo")
                     || src_lower.contains("y18.svg")
                     || src_lower.contains("avatar")
                 {
@@ -433,13 +436,13 @@ fn postprocess_markdown(md: &str) -> String {
 
     let mut text = lines.join("\n");
 
-    // Clean Wikipedia edit links like "## Heading [edit](...)" or "[edit]" in headings
-    if let Ok(re_heading_edit) = Regex::new(r#"(?m)^(#{1,6}\s+.*?)\s*\[\s*(?:edit|Edit)\s*\](?:\([^)]*\))?"#) {
+    // Clean Wikipedia edit links like "## Heading [edit](...)" or "## Heading [[edit](...)]"
+    if let Ok(re_heading_edit) = Regex::new(r#"(?m)^(#{1,6}\s+.*?)\s*\[{1,2}\s*(?:edit|Edit)\s*\](?:\([^)]*\))?\]?"#) {
         text = re_heading_edit.replace_all(&text, "$1").to_string();
     }
 
-    // Clean standalone [edit] or [edit](url) lines below Setext headings
-    if let Ok(re_edit_line) = Regex::new(r#"(?m)^\s*\[\s*(?:edit|Edit)\s*\](?:\([^)]*\))?\s*$\n?"#) {
+    // Clean standalone [edit] or [[edit](url)] lines
+    if let Ok(re_edit_line) = Regex::new(r#"(?m)^\s*\[{1,2}\s*(?:edit|Edit)\s*\](?:\([^)]*\))?\]?\s*$\n?"#) {
         text = re_edit_line.replace_all(&text, "").to_string();
     }
 
@@ -449,6 +452,11 @@ fn postprocess_markdown(md: &str) -> String {
     }
     if let Ok(re_sec_setext) = Regex::new(r"(?m)^\[[§#¶]\](?:\([^)]*\))?\s*(.*?)\n([=-]{3,})$") {
         text = re_sec_setext.replace_all(&text, "$1\n$2").to_string();
+    }
+
+    // Clean trailing section jump anchor links (e.g. "### Heading [#](url)" or "Heading [#](url)\n---")
+    if let Ok(re_trail_anchor) = Regex::new(r"(?m)\s*\[[#§¶]\](?:\([^)]*\))?\s*$") {
+        text = re_trail_anchor.replace_all(&text, "").to_string();
     }
 
     // Clean trailing closed ATX heading hashes (e.g. "### Title ###" -> "### Title")
