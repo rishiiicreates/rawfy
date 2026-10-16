@@ -270,6 +270,7 @@ def main() -> None:
     parser.add_argument("-o", "--out", type=str, default=None, help="Write output to file instead of stdout")
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress progress output")
     parser.add_argument("--no-footer", action="store_true", help="Suppress promotional footer")
+    parser.add_argument("--no-stats", action="store_true", help="Suppress fetch stats block in markdown output")
     parser.add_argument("--max-tokens", type=int, default=50000, help="Maximum tokens in output")
     parser.add_argument("--timeout", type=int, default=30, help="Fetch timeout in seconds")
     parser.add_argument("-v", "-V", "--version", action="version", version="rawfy 0.2.0")
@@ -323,17 +324,20 @@ def main() -> None:
                 "---",
                 "",
                 result.content.markdown,
-                "",
-                "---",
-                "_Rawfy fetch stats:_",
-                f"- method: {result.fetch_stats.method}",
-                f"- Duration: {result.fetch_stats.duration_ms}ms",
-                f"- Estimated tokens: {result.fetch_stats.estimated_tokens}",
             ])
-            if result.fetch_stats.truncated:
-                fm_lines.append("- ⚠️ Output was truncated")
-            if not args.no_footer and not args.quiet:
-                fm_lines.append("- ⭐ Star & follow @rishiiicreates on GitHub: https://github.com/rishiiicreates/rawfy")
+            if not getattr(args, "no_stats", False):
+                fm_lines.extend([
+                    "",
+                    "---",
+                    "_Rawfy fetch stats:_",
+                    f"- method: {result.fetch_stats.method}",
+                    f"- Duration: {result.fetch_stats.duration_ms}ms",
+                    f"- Estimated tokens: {result.fetch_stats.estimated_tokens}",
+                ])
+                if result.fetch_stats.truncated:
+                    fm_lines.append("- ⚠️ Output was truncated")
+                if not args.no_footer and not args.quiet:
+                    fm_lines.append("- ⭐ Star & follow @rishiiicreates on GitHub: https://github.com/rishiiicreates/rawfy")
             output = "\n".join(fm_lines)
 
         if args.out:
