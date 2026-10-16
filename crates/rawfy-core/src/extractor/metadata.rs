@@ -221,7 +221,17 @@ fn extract_json_ld(document: &Html) -> Option<Vec<serde_json::Value>> {
 fn calculate_word_metrics(document: &Html, body_text: Option<&str>) -> (usize, usize) {
     let count = if let Some(txt) = body_text {
         if !txt.is_empty() {
-            txt.split_whitespace().count()
+            if txt.contains('<') && txt.contains('>') {
+                let fragment = Html::parse_fragment(txt);
+                fragment
+                    .root_element()
+                    .text()
+                    .collect::<String>()
+                    .split_whitespace()
+                    .count()
+            } else {
+                txt.split_whitespace().count()
+            }
         } else {
             count_words_from_doc(document)
         }

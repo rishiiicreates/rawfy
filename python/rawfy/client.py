@@ -27,21 +27,21 @@ class OpenGraphData(BaseModel):
     description: Optional[str] = None
     image: Optional[str] = None
     url: Optional[str] = None
-    siteName: Optional[str] = None
+    site_name: Optional[str] = None
 
 class PageMetadata(BaseModel):
     url: str
-    canonicalUrl: Optional[str] = None
+    canonical_url: Optional[str] = None
     type: str
-    fetchedAt: str
+    fetched_at: str
     lang: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    wordCount: int
-    readingTimeMinutes: int
-    interactiveElementCount: int
+    word_count: int
+    reading_time_minutes: int
+    interactive_element_count: int
     og: Optional[OpenGraphData] = None
-    jsonLd: Optional[list[Any]] = None
+    json_ld: Optional[list[Any]] = None
 
 class PageContent(BaseModel):
     markdown: str
@@ -50,16 +50,16 @@ class PageContent(BaseModel):
 
 class FetchStats(BaseModel):
     method: str
-    durationMs: int
-    estimatedTokens: int
+    duration_ms: int
+    estimated_tokens: int
     truncated: bool
 
 class PageData(BaseModel):
     metadata: PageMetadata
     content: PageContent
     media: list[dict[str, Any]]
-    interactiveElements: list[dict[str, Any]]
-    fetchStats: FetchStats
+    interactive_elements: list[dict[str, Any]]
+    fetch_stats: FetchStats
 
 OutputFormat = Literal["markdown", "json", "text", "html"]
 
@@ -79,7 +79,7 @@ def fetch(
             url,
             timeout=timeout,
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Rawfy/0.1.1 (Native Python Client)"}
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Rawfy/0.2.0 (Native Python Client)"}
         )
         resp.raise_for_status()
     except httpx.TimeoutException:
@@ -108,15 +108,15 @@ def fetch(
     description = desc_tag['content'] if desc_tag and desc_tag.has_attr('content') else None
     
     og = OpenGraphData()
-    og_title = soup.find('meta', property='og:title')
-    if og_title: og.title = og_title.get('content')
-    og_desc = soup.find('meta', property='og:description')
-    if og_desc: og.description = og_desc.get('content')
-    og_image = soup.find('meta', property='og:image')
-    if og_image: og.image = og_image.get('content')
-    og_type = soup.find('meta', property='og:type')
-    if og_type: og.type = og_type.get('content')
-    
+    for prop in ['title', 'type', 'description', 'image', 'url']:
+        tag = soup.find('meta', attrs={'property': f'og:{prop}'})
+        if tag and tag.has_attr('content'):
+            setattr(og, prop, tag['content'])
+            
+    site_tag = soup.find('meta', attrs={'property': 'og:site_name'})
+    if site_tag and site_tag.has_attr('content'):
+        og.site_name = site_tag['content']
+        
     # Convert HTML to Markdown
     md = markdownify.markdownify(summary_html, heading_style="ATX").strip()
     
@@ -125,20 +125,30 @@ def fetch(
     text = summary_soup.get_text(separator=' ', strip=True)
     
     word_count = len(text.split())
+    estimated_tokens = max(1, int(word_count * 1.33))
+    
+    truncated = False
+    if estimated_tokens > max_tokens:
+        words = md.split()
+        target_words = max(1, int(max_tokens / 1.33))
+        if len(words) > target_words:
+            omitted = max(1, estimated_tokens - max_tokens)
+            md = " ".join(words[:target_words]) + f"\n\n[TRUNCATED: output exceeded {max_tokens} token limit. ~{omitted} tokens omitted...]"
+            truncated = True
     
     metadata = PageMetadata(
         url=final_url,
-        canonicalUrl=canonical_url,
+        canonical_url=canonical_url,
         type="article",
-        fetchedAt=datetime.now(timezone.utc).isoformat(),
+        fetched_at=datetime.now(timezone.utc).isoformat(),
         lang=lang,
         title=title,
         description=description,
-        wordCount=word_count,
-        readingTimeMinutes=max(1, word_count // 200),
-        interactiveElementCount=0,
+        word_count=word_count,
+        reading_time_minutes=max(1, (word_count + 199) // 200),
+        interactive_element_count=0,
         og=og,
-        jsonLd=None
+        json_ld=None
     )
     
     content = PageContent(
@@ -151,21 +161,21 @@ def fetch(
     
     stats = FetchStats(
         method="static",
-        durationMs=duration_ms,
-        estimatedTokens=word_count, # rough proxy
-        truncated=False
+        duration_ms=duration_ms,
+        estimated_tokens=estimated_tokens,
+        truncated=truncated
     )
     
     return PageData(
         metadata=metadata,
         content=content,
         media=[],
-        interactiveElements=[],
-        fetchStats=stats
+        interactive_elements=[],
+        fetch_stats=stats
     )
 
 def fetch_json(url: str, **kwargs) -> dict[str, Any]:
-    # Backwards compatibility: just dump the pydantic model
+    # Backwards compatibility: dump the pydantic model as dict
     page_data = fetch(url, **kwargs)
     return page_data.model_dump()
 
@@ -174,35 +184,37 @@ def metadata(url: str, **kwargs) -> dict[str, Any]:
     return page_data.metadata.model_dump()
 
 def main() -> None:
-    # 1. Native Rust binary check: prioritize explicit compiled binaries
-    candidates = [
-        os.environ.get("RAWFY_NATIVE_BIN"),
-        os.path.expanduser("~/rawfy/target/release/rawfy"),
-        os.path.expanduser("~/.cargo/bin/rawfy"),
-    ]
-    native_bin = None
-    for cand in candidates:
-        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
-            native_bin = cand
-            break
+    # 1. Native Rust binary check: unless RAWFY_FORCE_PYTHON is set
+    force_python = os.environ.get("RAWFY_FORCE_PYTHON", "").lower() in ("1", "true")
+    if not force_python:
+        candidates = [
+            os.environ.get("RAWFY_NATIVE_BIN"),
+            os.path.expanduser("~/rawfy/target/release/rawfy"),
+            os.path.expanduser("~/.cargo/bin/rawfy"),
+        ]
+        native_bin = None
+        for cand in candidates:
+            if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+                native_bin = cand
+                break
 
-    if not native_bin:
-        which_bin = shutil.which("rawfy")
-        if which_bin and os.path.realpath(which_bin) != os.path.realpath(sys.argv[0]):
+        if not native_bin:
+            which_bin = shutil.which("rawfy")
+            if which_bin and os.path.realpath(which_bin) != os.path.realpath(sys.argv[0]):
+                try:
+                    with open(which_bin, "rb") as f:
+                        header = f.read(4)
+                        if header in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\x7fELF", b"MZ"):
+                            native_bin = which_bin
+                except Exception:
+                    pass
+
+        if native_bin:
             try:
-                with open(which_bin, "rb") as f:
-                    header = f.read(4)
-                    if header in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\x7fELF", b"MZ"):
-                        native_bin = which_bin
+                res = subprocess.run([native_bin] + sys.argv[1:])
+                sys.exit(res.returncode)
             except Exception:
                 pass
-
-    if native_bin:
-        try:
-            res = subprocess.run([native_bin] + sys.argv[1:])
-            sys.exit(res.returncode)
-        except Exception:
-            pass
 
     # 2. Pure Python fallback CLI with full argparse support
     parser = argparse.ArgumentParser(
@@ -244,7 +256,41 @@ def main() -> None:
         elif args.format == "text":
             output = result.content.text
         else:
-            output = result.content.markdown
+            fm_lines = [
+                "---",
+                f"url: {result.metadata.url}",
+            ]
+            if result.metadata.canonical_url:
+                fm_lines.append(f"canonical_url: {result.metadata.canonical_url}")
+            fm_lines.extend([
+                f"type: {result.metadata.type}",
+                f"fetched_at: {result.metadata.fetched_at}",
+            ])
+            if result.metadata.lang:
+                fm_lines.append(f"lang: {result.metadata.lang}")
+            if result.metadata.title:
+                escaped_title = result.metadata.title.replace('"', '\\"')
+                fm_lines.append(f'title: "{escaped_title}"')
+            fm_lines.extend([
+                f"word_count: {result.metadata.word_count}",
+                f"reading_time_minutes: {result.metadata.reading_time_minutes}",
+                f"interactive_elements: {result.metadata.interactive_element_count}",
+                f"media_count: {len(result.media)}",
+                "---",
+                "",
+                result.content.markdown,
+                "",
+                "---",
+                "_Rawfy fetch stats:_",
+                f"- method: {result.fetch_stats.method}",
+                f"- Duration: {result.fetch_stats.duration_ms}ms",
+                f"- Estimated tokens: {result.fetch_stats.estimated_tokens}",
+            ])
+            if result.fetch_stats.truncated:
+                fm_lines.append("- ⚠️ Output was truncated")
+            if not args.no_footer:
+                fm_lines.append("- ⭐ Star & follow @rishiiicreates on GitHub: https://github.com/rishiiicreates/rawfy")
+            output = "\n".join(fm_lines)
 
         if args.out:
             out_path = os.path.expanduser(args.out)

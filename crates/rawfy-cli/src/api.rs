@@ -273,8 +273,12 @@ async fn metadata_handler(Query(query): Query<MetadataQuery>) -> Response {
         ..Default::default()
     };
 
+    let start_time = std::time::Instant::now();
     match rawfy_core::rawfy_metadata(&url, &options).await {
-        Ok(metadata) => Json(metadata).into_response(),
+        Ok(metadata) => (
+            [(axum::http::HeaderName::from_static("x-response-time-ms"), start_time.elapsed().as_millis().to_string())],
+            Json(metadata),
+        ).into_response(),
         Err(err) => error_to_response(err, "METADATA_FAILED", Some(url)),
     }
 }
@@ -297,8 +301,12 @@ async fn metadata_post_handler(Json(body): Json<MetadataBody>) -> Response {
         ..Default::default()
     };
 
+    let start_time = std::time::Instant::now();
     match rawfy_core::rawfy_metadata(&body.url, &options).await {
-        Ok(metadata) => Json(metadata).into_response(),
+        Ok(metadata) => (
+            [(axum::http::HeaderName::from_static("x-response-time-ms"), start_time.elapsed().as_millis().to_string())],
+            Json(metadata),
+        ).into_response(),
         Err(err) => error_to_response(err, "METADATA_FAILED", Some(body.url)),
     }
 }

@@ -63,8 +63,64 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
         result = re_jump.replace_all(&result, "").to_string();
     }
 
+    // 0a. Transform GitHub/Git diff tables into clean diff code blocks
+    if let Ok(re_diff_table) = Regex::new(r#"(?is)<table\b[^>]*?(?:data-diff-anchor|aria-label=["']Diff for|class=["'][^"']*(?:diff-table|js-diff-table|tab-size)[^"']*)[^>]*>(.*?)</table>"#) {
+        result = re_diff_table.replace_all(&result, |caps: &Captures| {
+            let table_content = &caps[1];
+            let mut diff_lines = Vec::new();
+            if let Ok(re_row) = Regex::new(r"(?is)<tr\b[^>]*>(.*?)</tr>") {
+                for row_cap in re_row.captures_iter(table_content) {
+                    let row = &row_cap[1];
+                    if let Ok(re_code_cell) = Regex::new(r#"(?is)<td\b[^>]*?class=["'][^"']*(?:blob-code|diff-text-cell)[^"']*["'][^>]*>(.*?)</td>"#) {
+                        if let Some(cell_cap) = re_code_cell.captures(row) {
+                            let cell_html = &cell_cap[1];
+                            let text = scraper::Html::parse_fragment(cell_html)
+                                .root_element()
+                                .text()
+                                .collect::<String>();
+                            let trimmed = text.trim_end_matches(['\r', '\n']);
+                            if !trimmed.is_empty() {
+                                diff_lines.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            if !diff_lines.is_empty() {
+                format!("<pre><code class=\"language-diff\">\n{}\n</code></pre>", diff_lines.join("\n"))
+            } else {
+                String::new()
+            }
+        }).to_string();
+    }
+
     // 0b. Pre-flatten nested and layout tables so html2md does not explode memory on comment trees
     result = flatten_layout_tables(&result);
+
+    // 0c. Clean Playground, Godbolt, and noisy web IDE links
+    if let Ok(re_ide) = Regex::new(r#"(?is)<a\b[^>]*?href=["'][^"']*(?:play\.rust-lang\.org|godbolt\.org)\/\?code=[^"']*["'][^>]*>.*?</a>"#) {
+        result = re_ide.replace_all(&result, "").to_string();
+    }
+
+    // 0e. Strip styling tags inside <pre> blocks so terminal ANSI colors and spans don't leak
+    if let Ok(re_pre) = Regex::new(r"(?is)<pre\b([^>]*)>(.*?)</pre>") {
+        result = re_pre.replace_all(&result, |caps: &Captures| {
+            let pre_attrs = &caps[1];
+            let pre_body = &caps[2];
+            if let Ok(re_tags) = Regex::new(r"(?is)</?(?:font|span|u|b|i|em|strong)\b[^>]*>") {
+                let stripped = re_tags.replace_all(pre_body, "").to_string();
+                format!("<pre{}>{}</pre>", pre_attrs, stripped)
+            } else {
+                format!("<pre{}>{}</pre>", pre_attrs, pre_body)
+            }
+        }).to_string();
+    }
+
+    // 0f. Strip legacy <font> tags globally and decode &apos;
+    if let Ok(re_font) = Regex::new(r"(?is)</?font\b[^>]*>") {
+        result = re_font.replace_all(&result, "").to_string();
+    }
+    result = result.replace("&apos;", "'");
 
     // 1. Transform <details><summary>Summary</summary>Body</details>
     if let Ok(re_details) = Regex::new(r"(?is)<details\b[^>]*>\s*<summary\b[^>]*>(.*?)</summary>(.*?)</details>") {
@@ -173,11 +229,19 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
             .replace_all(&result, |caps: &Captures| {
                 let attrs = &caps[1];
 
-                // Filter 1x1 or <3px tracking pixels
+                // Filter 1x1 tracking pixels and small UI icons (<32px)
                 let width = extract_attribute(attrs, "width").and_then(|w| w.parse::<u32>().ok());
                 let height = extract_attribute(attrs, "height").and_then(|h| h.parse::<u32>().ok());
                 if let (Some(w), Some(h)) = (width, height) {
-                    if w < 3 || h < 3 {
+                    if (w < 32 && h < 32) || w < 3 || h < 3 {
+                        return String::new();
+                    }
+                } else if let Some(w) = width {
+                    if w < 3 {
+                        return String::new();
+                    }
+                } else if let Some(h) = height {
+                    if h < 3 {
                         return String::new();
                     }
                 }
@@ -210,6 +274,11 @@ fn preprocess_html(html: &str, base_url: &str) -> String {
                     || src_lower.contains("tracking.gif")
                     || src_lower.ends_with("/s.gif")
                     || src_lower == "s.gif"
+                    || src_lower.contains("enwiki-25")
+                    || src_lower.contains("mediawiki_compact")
+                    || src_lower.contains("wikimedia.svg")
+                    || src_lower.contains("y18.svg")
+                    || src_lower.contains("avatar")
                 {
                     return String::new();
                 }
@@ -373,6 +442,35 @@ fn postprocess_markdown(md: &str) -> String {
     if let Ok(re_edit_line) = Regex::new(r#"(?m)^\s*\[\s*(?:edit|Edit)\s*\](?:\([^)]*\))?\s*$\n?"#) {
         text = re_edit_line.replace_all(&text, "").to_string();
     }
+
+    // Clean section jump anchor prefixes like "[§](url)Examples" or "[#](url)Examples"
+    if let Ok(re_sec_atx) = Regex::new(r"(?m)^(#{1,6}\s+)\[[§#¶]\](?:\([^)]*\))?\s*(.*)$") {
+        text = re_sec_atx.replace_all(&text, "$1$2").to_string();
+    }
+    if let Ok(re_sec_setext) = Regex::new(r"(?m)^\[[§#¶]\](?:\([^)]*\))?\s*(.*?)\n([=-]{3,})$") {
+        text = re_sec_setext.replace_all(&text, "$1\n$2").to_string();
+    }
+
+    // Clean trailing closed ATX heading hashes (e.g. "### Title ###" -> "### Title")
+    if let Ok(re_closed_heading) = Regex::new(r"(?m)^(#{1,6}\s+.*?)\s+#+\s*$") {
+        text = re_closed_heading.replace_all(&text, "$1").to_string();
+    }
+
+    // Merge standalone language line before code block: "js\n\n```" or "python\n```" -> "```js"
+    if let Ok(re_lang_fence) = Regex::new(r"(?m)^(js|javascript|ts|typescript|py|python|rust|rs|bash|sh|json|sql|html|css|c|cpp|yaml|diff|toml|text|go)\s*\n+\s*```\s*$") {
+        text = re_lang_fence.replace_all(&text, "```$1").to_string();
+    }
+
+    // Clean empty link artifacts like "[\n\n](url)" or "[](url)"
+    if let Ok(re_empty_link) = Regex::new(r"(?m)\[\s*\]\([^)]+\)") {
+        text = re_empty_link.replace_all(&text, "").to_string();
+    }
+
+    // Strip leaked raw HTML styling tags (e.g. <font color="...">, <fontcolor="...">, <span>, <u>)
+    if let Ok(re_leak) = Regex::new(r"(?is)</?(?:font\w*|span|u|b)\b[^>]*>") {
+        text = re_leak.replace_all(&text, "").to_string();
+    }
+    text = text.replace("&apos;", "'");
 
     // Ensure space between alphanumeric char and markdown link (e.g. "see[link]" -> "see [link]")
     if let Ok(re_link_space) = Regex::new(r"([a-zA-Z0-9])(\[[^\]\n]+\]\([^\)\n]+\))") {

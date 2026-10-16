@@ -236,22 +236,29 @@ fn is_tracking_pixel(img: &ElementRef) -> bool {
         || src_lower.contains("tracking.gif")
         || src_lower.ends_with("/s.gif")
         || src_lower == "s.gif"
+        || src_lower.contains("enwiki-25")
+        || src_lower.contains("mediawiki_compact")
+        || src_lower.contains("wikimedia.svg")
+        || src_lower.contains("y18.svg")
+        || src_lower.contains("avatar")
     {
         return true;
     }
 
-    if let Some(w_str) = img.value().attr("width") {
-        if let Some(w) = parse_dimension(w_str) {
-            if w > 0 && w < 3 {
-                return true;
-            }
+    let w = img.value().attr("width").and_then(parse_dimension);
+    let h = img.value().attr("height").and_then(parse_dimension);
+
+    if let (Some(w_val), Some(h_val)) = (w, h) {
+        if (w_val < 32 && h_val < 32) || w_val < 3 || h_val < 3 {
+            return true;
         }
-    }
-    if let Some(h_str) = img.value().attr("height") {
-        if let Some(h) = parse_dimension(h_str) {
-            if h > 0 && h < 3 {
-                return true;
-            }
+    } else if let Some(w_val) = w {
+        if w_val < 3 {
+            return true;
+        }
+    } else if let Some(h_val) = h {
+        if h_val < 3 {
+            return true;
         }
     }
     false

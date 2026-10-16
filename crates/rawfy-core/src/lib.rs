@@ -128,7 +128,7 @@ pub async fn rawfy_fetch(url: &str, options: &RawfyOptions) -> Result<PageData, 
         &fetch_result.html,
         &fetch_result.final_url,
         Some(&fetch_result.headers),
-        Some(&readability.content),
+        Some(&plain_text),
         interactive_elements.len(),
     );
 
@@ -203,7 +203,7 @@ pub fn rawfy_extract(html: &str, url: &str, options: &RawfyOptions) -> Result<Pa
         html,
         url,
         None,
-        Some(&readability.content),
+        Some(&plain_text),
         interactive_elements.len(),
     );
 

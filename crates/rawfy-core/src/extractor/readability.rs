@@ -25,7 +25,7 @@ pub fn extract_readability(html: &str, url: &str) -> ReadabilityResult {
         let orig_has_table = (html.contains("<th") || html.contains("<TH") || html.contains("<thead") || html.contains("<THEAD") || html.contains("class=\"wikitable\""))
             && (html.contains("<table") || html.contains("<TABLE"));
         let prod_has_table = product.content.contains("<table") || product.content.contains("<TABLE");
-        if orig_has_table && !prod_has_table && (word_count < 300 || html.len() > 30_000) {
+        if orig_has_table && !prod_has_table && word_count < 300 {
             return extract_body_fallback(html, url);
         }
 
@@ -178,6 +178,11 @@ fn strip_non_content_tags(html: &str) -> String {
     // Strip jump links
     if let Ok(re_jump) = Regex::new(r#"(?is)<a\b[^>]*?class="[^"]*mw-jump-link[^"]*"[^>]*?>.*?</a>"#) {
         cleaned = re_jump.replace_all(&cleaned, "").to_string();
+    }
+
+    // Strip Wikipedia portlet language and navigation bars
+    if let Ok(re_nav_divs) = Regex::new(r#"(?is)<(?:div|nav)\b[^>]*?(?:class="[^"]*(?:vector-header|vector-page-toolbar|vector-menu|mw-portlet-lang|sidebar|navbox)[^"]*"|id="(?:p-lang|mw-navigation|p-personal)")[^>]*?>.*?</(?:div|nav)>"#) {
+        cleaned = re_nav_divs.replace_all(&cleaned, "").to_string();
     }
 
     cleaned
