@@ -37,6 +37,34 @@ rawfy --help
 
 ---
 
+## 🧠 Install as an AI Agent Skill (AGY, Claude Code, Codex)
+
+To install Rawfy directly into your AI agent runtimes with a single command:
+
+```bash
+# Recommended: one-line cross-platform installer via Astral uvx (macOS, Linux & Windows)
+uvx --from git+https://github.com/rishiiicreates/rawfy.git#subdirectory=python rawfy --install-skill
+
+# Or if you already installed rawfy globally
+rawfy --install-skill
+```
+
+Alternative methods:
+```bash
+# Via curl / bash
+curl -fsSL https://raw.githubusercontent.com/rishiiicreates/rawfy/main/install-skill.sh | bash
+
+# Via Windows PowerShell
+irm https://raw.githubusercontent.com/rishiiicreates/rawfy/main/install-skill.ps1 | iex
+
+# Via universal skills CLI
+npx -y skills add rishiicreates/rawfy
+```
+
+This installs the skill directly into `~/.agents/skills/rawfy/` and `~/.claude/skills/rawfy/`. Autonomous agents running in Antigravity, Claude Code, Codex, and Gemini CLI will automatically discover and trigger Rawfy whenever asked to fetch or parse a webpage.
+
+---
+
 ## 🌟 Key Capabilities
 
 1. **Sub-100ms Native Rust Engine**

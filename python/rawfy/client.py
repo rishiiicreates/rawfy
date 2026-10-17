@@ -13,6 +13,15 @@ from bs4 import BeautifulSoup
 from readability import Document
 import markdownify
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 class RawfyError(Exception):
     def __init__(self, message: str, code: str | None = None, url: str | None = None, status_code: int | None = None):
         self.code = code
@@ -80,7 +89,7 @@ def fetch(
             url,
             timeout=timeout,
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Rawfy/0.2.0 (Native Python Client)"}
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Rawfy/0.2.1 (Native Python Client)"}
         )
         resp.raise_for_status()
     except httpx.TimeoutException:
@@ -196,63 +205,104 @@ def metadata(url: str, **kwargs) -> PageMetadata:
     page_data = fetch(url, **kwargs)
     return page_data.metadata
 
-def check_installation() -> dict[str, Any]:
-    """Check if the native Rust binary is available on the system."""
+def _find_native_binary() -> Optional[str]:
+    ext = ".exe" if sys.platform == "win32" else ""
     candidates = [
         os.environ.get("RAWFY_NATIVE_BIN"),
-        os.path.expanduser("~/rawfy/target/release/rawfy"),
-        os.path.expanduser("~/.cargo/bin/rawfy"),
+        os.path.expanduser(f"~/rawfy/target/release/rawfy{ext}"),
+        os.path.expanduser(f"~/.cargo/bin/rawfy{ext}"),
     ]
-    native_bin = None
     for cand in candidates:
-        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
-            native_bin = cand
-            break
+        if cand and os.path.isfile(cand) and (os.access(cand, os.X_OK) or sys.platform == "win32"):
+            return cand
 
-    if not native_bin:
-        which_bin = shutil.which("rawfy")
-        if which_bin and os.path.realpath(which_bin) != os.path.realpath(sys.argv[0]):
+    which_bin = shutil.which("rawfy")
+    if which_bin:
+        is_self = False
+        try:
+            if sys.prefix and which_bin.lower().startswith(sys.prefix.lower()):
+                is_self = True
+            if os.path.realpath(which_bin).lower() == os.path.realpath(sys.argv[0]).lower():
+                is_self = True
+        except Exception:
+            pass
+
+        if not is_self:
             try:
                 with open(which_bin, "rb") as f:
                     header = f.read(4)
-                    if header in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\x7fELF", b"MZ"):
-                        native_bin = which_bin
+                    if header in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\x7fELF") or header[:2] == b"MZ":
+                        return which_bin
             except Exception:
                 pass
+    return None
 
+def check_installation() -> dict[str, Any]:
+    """Check if the native Rust binary is available on the system."""
+    native_bin = _find_native_binary()
     return {
         "native_binary_available": native_bin is not None,
         "native_binary_path": native_bin,
         "engine": "rust" if native_bin is not None else "python",
-        "version": "0.2.0",
+        "version": "0.2.1",
     }
+
+SKILL_MARKDOWN = """---
+name: rawfy
+description: Use this skill whenever the user wants to extract content from a URL, convert a webpage to Markdown, fetch structured data from a site, scrape clean text for an AI agent, turn a URL into machine-readable content, or use Rawfy as part of an agentic pipeline. Triggers on phrases like "fetch this URL", "extract content from", "scrape this page", "convert URL to markdown", "get the text from this website", or any time a URL needs to become structured data for downstream processing.
+---
+
+# Rawfy Skill
+
+## 1. What is Rawfy
+Rawfy is a fast web perception engine for AI agents that converts any URL into structured, agent-readable markdown, clean text, or JSON with metadata, word counts, and token budget truncation.
+
+## 2. Agent Usage
+Run rawfy CLI directly from bash:
+```bash
+rawfy <url>
+rawfy <url> -f json
+rawfy <url> --max-tokens 5000
+```
+Or via Python:
+```python
+from rawfy import fetch
+page = fetch("<url>")
+print(page.content.markdown)
+```
+"""
+
+def install_skill() -> None:
+    home = os.path.expanduser("~")
+    dirs = [
+        os.path.join(home, ".agents", "skills", "rawfy"),
+        os.path.join(home, ".claude", "skills", "rawfy"),
+    ]
+    gemini_base = os.path.join(home, ".gemini", "antigravity-cli", "skills")
+    if os.path.isdir(gemini_base):
+        dirs.append(os.path.join(gemini_base, "rawfy"))
+
+    installed = []
+    for d in dirs:
+        try:
+            os.makedirs(d, exist_ok=True)
+            skill_path = os.path.join(d, "SKILL.md")
+            with open(skill_path, "w", encoding="utf-8") as f:
+                f.write(SKILL_MARKDOWN.strip() + "\n")
+            installed.append(skill_path)
+        except Exception as e:
+            print(f"Warning: could not install to {d}: {e}", file=sys.stderr)
+
+    print("✅ Rawfy skill successfully installed for AI agents:")
+    for p in installed:
+        print(f"   - {p}")
+    print("\n✨ AGY, Claude Code, Codex, and Gemini CLI can now use Rawfy automatically!")
 
 def main() -> None:
     # 1. Native Rust binary check: unless RAWFY_FORCE_PYTHON is set
     force_python = os.environ.get("RAWFY_FORCE_PYTHON", "").lower() in ("1", "true")
-    if not force_python:
-        candidates = [
-            os.environ.get("RAWFY_NATIVE_BIN"),
-            os.path.expanduser("~/rawfy/target/release/rawfy"),
-            os.path.expanduser("~/.cargo/bin/rawfy"),
-        ]
-        native_bin = None
-        for cand in candidates:
-            if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
-                native_bin = cand
-                break
-
-        if not native_bin:
-            which_bin = shutil.which("rawfy")
-            if which_bin and os.path.realpath(which_bin) != os.path.realpath(sys.argv[0]):
-                try:
-                    with open(which_bin, "rb") as f:
-                        header = f.read(4)
-                        if header in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\x7fELF", b"MZ"):
-                            native_bin = which_bin
-                except Exception:
-                    pass
-
+    if not force_python and "--install-skill" not in sys.argv and "install-skill" not in sys.argv:
+        native_bin = _find_native_binary()
         if native_bin:
             try:
                 res = subprocess.run([native_bin] + sys.argv[1:])
@@ -273,9 +323,14 @@ def main() -> None:
     parser.add_argument("--no-stats", action="store_true", help="Suppress fetch stats block in markdown output")
     parser.add_argument("--max-tokens", type=int, default=50000, help="Maximum tokens in output")
     parser.add_argument("--timeout", type=int, default=30, help="Fetch timeout in seconds")
-    parser.add_argument("-v", "-V", "--version", action="version", version="rawfy 0.2.0")
+    parser.add_argument("--install-skill", action="store_true", help="Install rawfy skill into AI agent directories (~/.agents/skills, ~/.claude/skills)")
+    parser.add_argument("-v", "-V", "--version", action="version", version="rawfy 0.2.1")
 
     args = parser.parse_args()
+
+    if args.install_skill or args.url == "install-skill":
+        install_skill()
+        sys.exit(0)
 
     url = args.url
     if not url:

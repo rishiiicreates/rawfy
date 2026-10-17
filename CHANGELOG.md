@@ -2,6 +2,17 @@
 
 All notable changes to Rawfy will be documented in this file.
 
+## [0.2.1] — 2026-10-17
+
+### 🤖 Universal AI Agent Skill & Windows Platform Parity
+
+- **Direct AI Agent Skill Packaging**: Added `--install-skill` to `rawfy` CLI and single-command distribution via `uvx --from git+https://github.com/rishiiicreates/rawfy.git#subdirectory=python rawfy --install-skill` for automatic installation across Antigravity (`~/.agents/skills/rawfy`), Claude Code (`~/.claude/skills/rawfy`), and Gemini CLI environments.
+- **Cross-Platform Skill Installers**: Added `install-skill.sh` (macOS/Linux) and `install-skill.ps1` (Windows PowerShell) for zero-dependency local agent skill installations.
+- **Windows Platform Compatibility**: Fixed Windows console encoding crash on non-ASCII characters and emojis by safely reconfiguring `sys.stdout`/`sys.stderr` to UTF-8.
+- **Windows Native Binary Sniffer**: Added `.exe` binary extension resolution to candidate paths and prevented infinite subprocess recursion loops by verifying `sys.prefix` and real path isolation.
+- **Python Dependency Fixes**: Added `lxml-html-clean>=0.1.0` dependency to resolve broken `Document` cleaner imports on clean Python environments.
+- **Python Ergonomics**: Re-exported all Pydantic core models (`PageData`, `PageMetadata`, `PageContent`, `FetchStats`, `OpenGraphData`, `OutputFormat`) at the top level of the `rawfy` Python package.
+
 ## [0.2.0] — 2026-10-16
 
 ### 🚀 Major Rewrite: Native Rust Core & Astral `uv` Distribution

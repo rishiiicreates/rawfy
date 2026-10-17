@@ -34,7 +34,7 @@ from rawfy.client import (
     OutputFormat,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __all__ = [
     "fetch",
     "fetch_json",

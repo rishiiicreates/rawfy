@@ -476,11 +476,12 @@ wheels = [
 
 [[package]]
 name = "rawfy"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "httpx" },
+    { name = "lxml-html-clean" },
     { name = "markdownify" },
     { name = "pydantic" },
     { name = "readability-lxml" },
@@ -490,6 +491,7 @@ dependencies = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.0" },
     { name = "httpx", specifier = ">=0.24.0" },
+    { name = "lxml-html-clean", specifier = ">=0.1.0" },
     { name = "markdownify", specifier = ">=0.11.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "readability-lxml", specifier = ">=0.8.1" },

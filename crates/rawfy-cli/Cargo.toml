@@ -1,6 +1,6 @@
 [package]
 name = "rawfy-cli"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Rawfy CLI, MCP stdio server, and REST API in Rust"
 license = "MIT"
