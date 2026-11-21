@@ -12,6 +12,12 @@ Rawfy is **not** an AI agent. Rawfy is the high-performance perception tool that
 
 ---
 
+## 🏛️ XERJ Corpus Hub
+
+Rawfy is featured and indexed on the [XERJ Corpus Hub](https://hub.xerj.org/corpus/rishiiicreates--rawfy) as an open-source reference solution for AI coding agents. You can view the live corpus and contributor profile on [hub.xerj.org](https://hub.xerj.org/contributors/rishiiicreates).
+
+---
+
 ## ⚡ Instant Run via Astral `uvx`
 
 No compilation or manual environment setup needed. If you have Astral's [`uv`](https://github.com/astral-sh/uv) installed, run Rawfy directly:
@@ -261,12 +267,6 @@ _Rawfy fetch stats:_
   }
 }
 ```
-
----
-
-## 🏛️ XERJ Corpus Hub
-
-Rawfy is featured and indexed on the [XERJ Corpus Hub](https://hub.xerj.org/corpus/rishiiicreates--rawfy) as an open-source reference solution for AI coding agents. You can view the live corpus and contributor profile on [hub.xerj.org](https://hub.xerj.org/contributors/rishiiicreates).
 
 ---
 
