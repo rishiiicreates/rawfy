@@ -7,6 +7,7 @@ Rawfy is **not** an AI agent. Rawfy is the high-performance perception tool that
 [![Rust 2021](https://img.shields.io/badge/Rust-2021%20edition-orange?logo=rust)](https://www.rust-lang.org)
 [![Astral uv](https://img.shields.io/badge/Distributed%20via-Astral%20uv-blue?logo=python)](https://github.com/astral-sh/uv)
 [![MCP Spec](https://img.shields.io/badge/Protocol-MCP%202024--11--05-purple)](https://modelcontextprotocol.io)
+[![XERJ Corpus Hub](https://hub.xerj.org/contributors/rishiiicreates/badge.svg)](https://hub.xerj.org/contributors/rishiiicreates)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -260,6 +261,12 @@ _Rawfy fetch stats:_
   }
 }
 ```
+
+---
+
+## 🏛️ XERJ Corpus Hub
+
+Rawfy is featured and indexed on the [XERJ Corpus Hub](https://hub.xerj.org/corpus/rishiiicreates--rawfy) as an open-source reference solution for AI coding agents. You can view the live corpus and contributor profile on [hub.xerj.org](https://hub.xerj.org/contributors/rishiiicreates).
 
 ---
 
